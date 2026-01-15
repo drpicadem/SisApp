@@ -1,0 +1,6 @@
+@ŠišAppApi_HostAddress = http://localhost:5205
+
+GET {{ŠišAppApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

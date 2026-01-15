@@ -1,0 +1,75 @@
+services:
+  # SQL Server Database
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sisapp-sql
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlvolume:/var/opt/mssql
+    networks:
+      - sisapp-network
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: sisapp-rabbitmq
+    ports:
+      - "5672:5672" # AMQP protocol
+      - "15672:15672" # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS}
+    networks:
+      - sisapp-network
+
+  # Main API Service
+  sisapp-api:
+    build:
+      context: ./backend/ŠišAppApi
+      dockerfile: Dockerfile
+    container_name: sisapp-api
+    depends_on:
+      - rabbitmq
+      - sqlserver
+    ports:
+      - "7100:8080" # Exposed port
+    environment:
+      - ConnectionStrings__DefaultConnection=${DB_CONNECTION_STRING}
+      - RabbitMQ__Host=${RABBITMQ_HOST}
+      - Jwt__Key=${JWT_KEY}
+      - Jwt__Issuer=${JWT_ISSUER}
+      - Jwt__Audience=${JWT_AUDIENCE}
+      - Stripe__SecretKey=${STRIPE_SECRET_KEY}
+      - Stripe__PublishableKey=${STRIPE_PUBLISHABLE_KEY}
+      - Twilio__AccountSid=${TWILIO_ACCOUNT_SID}
+      - Twilio__AuthToken=${TWILIO_AUTH_TOKEN}
+      - Twilio__PhoneNumber=${TWILIO_PHONE_NUMBER}
+    networks:
+      - sisapp-network
+
+  # Helper Service (Worker)
+  sisapp-helper:
+    build:
+      context: ./backend/ŠišApp.Helper
+      dockerfile: Dockerfile
+    container_name: sisapp-helper
+    depends_on:
+      - rabbitmq
+      - sisapp-api
+    environment:
+      - RabbitMQ__Host=${RABBITMQ_HOST}
+      - EmailSettings__SenderEmail=${SENDER_EMAIL}
+      - EmailSettings__SenderPassword=${SENDER_PASSWORD}
+    networks:
+      - sisapp-network
+
+networks:
+  sisapp-network:
+    driver: bridge
+
+volumes:
+  sqlvolume:
