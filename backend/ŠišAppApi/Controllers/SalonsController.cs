@@ -18,9 +18,35 @@ public class SalonsController : ControllerBase
 
     // GET: api/Salons
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Salon>>> GetSalons()
+    public async Task<ActionResult<IEnumerable<object>>> GetSalons()
     {
-        return await _context.Salons.ToListAsync();
+        return await _context.Salons
+            .Include(s => s.Barbers)
+            .Select(s => new 
+            {
+                s.Id,
+                s.Name,
+                s.City,
+                s.Address,
+                s.Phone,
+                EmployeeCount = s.Barbers.Count(b => !b.IsDeleted),
+                Rating = s.Rating,
+                IsActive = s.IsActive
+            })
+            .ToListAsync();
+    }
+
+    // PUT: api/Salons/5/status
+    [HttpPut("{id}/status")]
+    public async Task<IActionResult> ToggleStatus(int id)
+    {
+        var salon = await _context.Salons.FindAsync(id);
+        if (salon == null) return NotFound();
+
+        salon.IsActive = !salon.IsActive;
+        await _context.SaveChangesAsync();
+        
+        return Ok(new { isActive = salon.IsActive });
     }
 
     // GET: api/Salons/5

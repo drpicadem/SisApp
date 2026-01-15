@@ -12,7 +12,7 @@ public class Service
     public int SalonId { get; set; }
     
     [ForeignKey("SalonId")]
-    public Salon Salon { get; set; } = null!;
+    public Salon? Salon { get; set; }
     
     [Required]
     [MaxLength(100)]

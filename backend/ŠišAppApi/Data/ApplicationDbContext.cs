@@ -43,6 +43,25 @@ public class ApplicationDbContext : DbContext
             .HasIndex(u => u.Username)
             .IsUnique();
 
+        // 1:1 Relationships (User -> Roles)
+        modelBuilder.Entity<User>()
+            .HasOne(u => u.Barber)
+            .WithOne(b => b.User)
+            .HasForeignKey<Barber>(b => b.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<User>()
+            .HasOne(u => u.Admin)
+            .WithOne(a => a.User)
+            .HasForeignKey<Admin>(a => a.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<User>()
+            .HasOne(u => u.Customer)
+            .WithOne(c => c.User)
+            .HasForeignKey<Customer>(c => c.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // Decimal precision
         modelBuilder.Entity<Payment>()
             .Property(p => p.Amount)

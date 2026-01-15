@@ -23,6 +23,15 @@ public class ServicesController : ControllerBase
         return await _context.Services.ToListAsync();
     }
 
+    // GET: api/Services/salon/1
+    [HttpGet("salon/{salonId}")]
+    public async Task<ActionResult<IEnumerable<Service>>> GetServicesBySalon(int salonId)
+    {
+        return await _context.Services
+            .Where(s => s.SalonId == salonId && !s.IsDeleted)
+            .ToListAsync();
+    }
+
     // GET: api/Services/5
     [HttpGet("{id}")]
     public async Task<ActionResult<Service>> GetService(int id)

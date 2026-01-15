@@ -34,7 +34,8 @@ namespace ŠišAppApi.Data
         public static void Seed(ApplicationDbContext context)
         {
                 // Apply migrations automatically
-                context.Database.Migrate();
+                // Use EnsureCreated to match DB to current Code Model (bypassing old migrations)
+                context.Database.EnsureCreated();
 
                 if (!context.Salons.Any())
                 {

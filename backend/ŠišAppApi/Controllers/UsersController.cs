@@ -18,9 +18,16 @@ public class UsersController : ControllerBase
 
     // GET: api/Users
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<User>>> GetUsers()
+    public async Task<ActionResult<IEnumerable<User>>> GetUsers([FromQuery] string? role = null)
     {
-        return await _context.Users.ToListAsync();
+        IQueryable<User> query = _context.Users;
+
+        if (!string.IsNullOrEmpty(role))
+        {
+            query = query.Where(u => u.Role == role);
+        }
+
+        return await query.ToListAsync();
     }
 
     // GET: api/Users/5

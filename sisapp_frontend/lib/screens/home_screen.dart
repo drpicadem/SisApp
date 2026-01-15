@@ -42,17 +42,31 @@ class HomeScreen extends StatelessWidget {
               },
             ),
             ListTile(
-              leading: Icon(Icons.store),
-              title: Text('Saloni'),
+              leading: Icon(Icons.cut),
+              title: Text('Usluge (Cjenovnik)'),
               onTap: () {
-                // TODO: Navigate to salons
+                Navigator.of(context).pushNamed('/services');
               },
             ),
             ListTile(
               leading: Icon(Icons.people),
               title: Text('Korisnici'),
               onTap: () {
-                // TODO: Navigate to users
+                Navigator.of(context).pushNamed('/users');
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.store),
+              title: Text('Frizerski saloni'),
+              onTap: () {
+                Navigator.of(context).pushNamed('/salons');
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.cut),
+              title: Text('Uposlenici (Frizeri)'),
+              onTap: () {
+                Navigator.of(context).pushNamed('/barbers');
               },
             ),
              ListTile(
@@ -60,6 +74,13 @@ class HomeScreen extends StatelessWidget {
               title: Text('Recenzije'),
               onTap: () {
                 // TODO: Navigate to reviews
+              },
+            ),
+             ListTile(
+              leading: Icon(Icons.analytics),
+              title: Text('Izvještaji'),
+              onTap: () {
+                Navigator.of(context).pushNamed('/reports');
               },
             ),
           ],

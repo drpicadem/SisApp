@@ -12,13 +12,13 @@ public class Barber
     public int UserId { get; set; }
     
     [ForeignKey("UserId")]
-    public User User { get; set; } = null!;
+    public User? User { get; set; }
     
     [Required]
     public int SalonId { get; set; }
     
     [ForeignKey("SalonId")]
-    public Salon Salon { get; set; } = null!;
+    public Salon? Salon { get; set; }
     
     public string? Bio { get; set; }
     

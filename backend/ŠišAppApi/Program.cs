@@ -14,7 +14,11 @@ using MassTransit;
 var builder = WebApplication.CreateBuilder(args);
 
 // Dodavanje servisa
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    });
 builder.Services.AddEndpointsApiExplorer();
 
 // Konfiguracija baze podataka
@@ -113,7 +117,16 @@ var app = builder.Build();
 app.UseSwagger();
 
 // Seed Database
-DbInitializer.Seed(app);
+// Seed Database
+try
+{
+    DbInitializer.Seed(app);
+}
+catch (Exception ex)
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogError(ex, "An error occurred while seeding the database.");
+}
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "ŠišApp API V1");
