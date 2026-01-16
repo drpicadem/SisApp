@@ -91,7 +91,12 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (success) {
-        Navigator.pushReplacementNamed(context, '/home');
+        final auth = context.read<AuthProvider>();
+        if (auth.isAdmin || auth.isBarber) {
+             Navigator.pushReplacementNamed(context, '/home');
+        } else {
+             Navigator.pushReplacementNamed(context, '/customer-home');
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Greška pri prijavi')),

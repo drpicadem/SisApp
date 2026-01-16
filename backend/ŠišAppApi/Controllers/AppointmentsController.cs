@@ -73,10 +73,15 @@ namespace ŠišAppApi.Controllers
         public override async Task<ActionResult<Appointment>> Create(Appointment appointment)
         {
              var userId = GetUserId();
-             appointment.UserId = userId; // Force current user
-             appointment.CreatedAt = DateTime.UtcNow;
+             
+             // Force key fields for security
+             appointment.UserId = userId;
              appointment.Status = "Pending";
              appointment.PaymentStatus = "Pending";
+             appointment.CreatedAt = DateTime.UtcNow;
+             // Id should be 0 from binding if not sent. If sent, we ignore/overwrite it by EF usually if it's identity, but let's be safe.
+             // Actually EF ignores explicit ID for identity columns usually, or throws if IDENTITY_INSERT is off. 
+             // Frontend fix ensures ID isn't sent.
 
              // Basic Validation: Check for overlap
              var newAppStart = appointment.AppointmentDateTime;
@@ -86,7 +91,7 @@ namespace ŠišAppApi.Controllers
                 a.BarberId == appointment.BarberId && 
                 a.Status != "Cancelled" &&
                 a.AppointmentDateTime < newAppEnd && 
-                a.AppointmentDateTime.AddMinutes(30) > newAppStart // Assuming 30 min duration for existing
+                a.AppointmentDateTime.AddMinutes(30) > newAppStart 
              );
 
              if (isTaken)
@@ -121,9 +126,27 @@ namespace ŠišAppApi.Controllers
             var workingHours = await _context.WorkingHours
                 .FirstOrDefaultAsync(w => w.BarberId == barberId && w.DayOfWeek == dayOfWeek && w.IsWorking);
 
+            // 4. Generate slots
+            var availableSlots = new List<string>();
+            TimeSpan currentTime;
+            TimeSpan endTime;
+
             if (workingHours == null)
             {
-                return Ok(new List<string>()); // Not working today
+                // Fallback: Assume default working hours (e.g., 09:00 - 17:00) for new barbers
+                // Check if it's Sunday (Day 0) - usually closed
+                if (dayOfWeek == 0) 
+                {
+                     return Ok(new List<string>()); 
+                }
+
+                currentTime = new TimeSpan(9, 0, 0);
+                endTime = new TimeSpan(17, 0, 0);
+            }
+            else
+            {
+                currentTime = workingHours.StartTime;
+                endTime = workingHours.EndTime;
             }
 
             // 3. Get existing appointments
@@ -138,9 +161,7 @@ namespace ŠišAppApi.Controllers
                 .ToListAsync();
 
             // 4. Generate slots
-            var availableSlots = new List<string>();
-            var currentTime = workingHours.StartTime;
-            var endTime = workingHours.EndTime;
+            // availableSlots already declared above
 
             // Prevent booking in the past if date is today
             var now = DateTime.Now;

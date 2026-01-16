@@ -131,10 +131,33 @@ namespace ŠišAppApi.Data
                              CreatedAt = DateTime.UtcNow
                         };
                         context.Barbers.Add(barberProfile);
-
                         context.SaveChanges();
                     }
                 }
+
+                // Separate check for WorkingHours to ensure they are added even if users exist
+                if (!context.WorkingHours.Any())
+                {
+                    var barber = context.Barbers.FirstOrDefault();
+                    if (barber != null)
+                    {
+                        var workingHoursList = new List<WorkingHours>();
+                        for (int i = 1; i <= 5; i++)
+                        {
+                            workingHoursList.Add(new WorkingHours
+                            {
+                                BarberId = barber.Id,
+                                DayOfWeek = i,
+                                StartTime = new TimeSpan(9, 0, 0),
+                                EndTime = new TimeSpan(17, 0, 0),
+                                IsWorking = true,
+                                CreatedAt = DateTime.UtcNow
+                            });
+                        }
+                        context.WorkingHours.AddRange(workingHoursList);
+                        context.SaveChanges();
+                    }
+                }
+            }
         }
     }
-}

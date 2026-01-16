@@ -6,6 +6,8 @@ import '../models/service.dart';
 import '../models/barber.dart';
 import '../models/salon.dart';
 import '../models/user.dart';
+import '../models/appointment.dart';
+import 'package:intl/intl.dart';
 
 class ApiService {
   static const String baseUrl = 'http://localhost:7100/api';
@@ -229,6 +231,50 @@ class ApiService {
     } catch (e) {
       print('Get Reports error: $e');
       return null;
+    }
+  }
+
+  // Appointment methods
+  Future<List<String>> getAvailableSlots(int barberId, DateTime date, String token) async {
+    try {
+      final dateStr = DateFormat('yyyy-MM-dd').format(date);
+      final response = await http.get(
+        Uri.parse('$baseUrl/Appointments/available-slots?barberId=$barberId&date=$dateStr'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        List<dynamic> body = jsonDecode(response.body);
+        return body.cast<String>();
+      }
+      return [];
+    } catch (e) {
+      print('Get Available Slots error: $e');
+      return [];
+    }
+  }
+
+  Future<String?> createAppointment(Appointment appointment, String token) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/Appointments'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(appointment.toJson()),
+      );
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return null; // Success, no error
+      } else {
+        return response.body; // Return server error message
+      }
+    } catch (e) {
+      print('Create Appointment error: $e');
+      return e.toString();
     }
   }
 }

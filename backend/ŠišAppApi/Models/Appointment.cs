@@ -12,25 +12,25 @@ public class Appointment
     public int UserId { get; set; }
     
     [ForeignKey("UserId")]
-    public User User { get; set; } = null!;
+    public User? User { get; set; }
     
     [Required]
     public int ServiceId { get; set; }
     
     [ForeignKey("ServiceId")]
-    public Service Service { get; set; } = null!;
+    public Service? Service { get; set; }
     
     [Required]
     public int BarberId { get; set; }
     
     [ForeignKey("BarberId")]
-    public Barber Barber { get; set; } = null!;
+    public Barber? Barber { get; set; }
     
     [Required]
     public int SalonId { get; set; }
     
     [ForeignKey("SalonId")]
-    public Salon Salon { get; set; } = null!;
+    public Salon? Salon { get; set; }
     
     [Required]
     public DateTime AppointmentDateTime { get; set; }
