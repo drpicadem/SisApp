@@ -1,0 +1,192 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import '../../models/appointment.dart';
+import '../../providers/booking_provider.dart';
+import '../../providers/payment_provider.dart';
+// import '../../utils/helpers.dart'; // Commenting out as it might not be needed or doesn't exist yet
+
+class ReservationReviewScreen extends StatefulWidget {
+  final Appointment appointment;
+  final String serviceName;
+  final double price;
+  final String salonName;
+  final String barberName;
+
+  const ReservationReviewScreen({
+    Key? key,
+    required this.appointment,
+    required this.serviceName,
+    required this.price,
+    required this.salonName,
+    required this.barberName,
+  }) : super(key: key);
+
+  @override
+  _ReservationReviewScreenState createState() => _ReservationReviewScreenState();
+}
+
+class _ReservationReviewScreenState extends State<ReservationReviewScreen> {
+  bool _isLoading = false;
+
+  void _confirmBooking({bool payOnline = false}) async {
+    setState(() => _isLoading = true);
+    
+    final bookingProvider = Provider.of<BookingProvider>(context, listen: false);
+    final paymentProvider = Provider.of<PaymentProvider>(context, listen: false);
+
+    try {
+      // 1. Create Appointment
+      final result = await bookingProvider.createAppointment(widget.appointment);
+
+      if (result is Appointment) {
+        if (payOnline) {
+          // 2. Initiate Payment
+          await paymentProvider.initiatePayment(
+            result,
+            widget.serviceName,
+            widget.price,
+          );
+          
+          // Poll for status
+          bool paid = await paymentProvider.monitorPaymentStatus(result.id!);
+          if (paid) {
+            _showSuccess("Rezervacija uspješna i plaćena!");
+          } else {
+             // Payment might have been cancelled or failed, but appointment exists
+             _showSuccess("Rezervacija kreirana, ali plaćanje nije dovršeno.");
+          }
+        } else {
+          // Pay at Salon
+          _showSuccess("Rezervacija uspješna! Plaćanje u salonu.");
+        }
+      } else {
+        _showError(result.toString());
+      }
+    } catch (e) {
+      _showError("Došlo je do greške: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showSuccess(String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Column(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 60),
+            SizedBox(height: 10),
+            Text("Uspješno!", style: TextStyle(color: Colors.green)),
+          ],
+        ),
+        content: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 16),
+        ),
+        actions: [
+          Center(
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+              ),
+              onPressed: () {
+                Navigator.of(ctx).pop(); // Close dialog
+                Navigator.of(context).popUntil((route) => route.isFirst); // Go to home
+              },
+              child: Text("Povratak na početnu"),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currencyFormatter = NumberFormat.currency(locale: 'bs', symbol: 'KM');
+
+    return Scaffold(
+      appBar: AppBar(title: Text("Pregled Rezervacije")),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Card(
+              elevation: 4,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Detalji termina", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Divider(),
+                    _buildDetailRow("Usluga:", widget.serviceName),
+                    _buildDetailRow("Salon:", widget.salonName),
+                    _buildDetailRow("Frizer:", widget.barberName),
+                    _buildDetailRow("Datum:", DateFormat('dd.MM.yyyy').format(widget.appointment.appointmentDateTime)),
+                    _buildDetailRow("Vrijeme:", DateFormat('HH:mm').format(widget.appointment.appointmentDateTime)),
+                    Divider(),
+                    _buildDetailRow("Ukupno:", currencyFormatter.format(widget.price), isBold: true),
+                  ],
+                ),
+              ),
+            ),
+            Spacer(),
+            Text("Odaberite način plaćanja:", style: TextStyle(fontWeight: FontWeight.bold)),
+            SizedBox(height: 10),
+            ElevatedButton.icon(
+              icon: Icon(Icons.credit_card),
+              label: Text("Plati online (Kartica / PayPal)"),
+              style: ElevatedButton.styleFrom(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: Colors.blue[800],
+                foregroundColor: Colors.white,
+              ),
+              onPressed: _isLoading ? null : () => _confirmBooking(payOnline: true),
+            ),
+            SizedBox(height: 10),
+            OutlinedButton.icon(
+              icon: Icon(Icons.store),
+              label: Text("Plati u salonu"),
+              style: OutlinedButton.styleFrom(
+                padding: EdgeInsets.symmetric(vertical: 16),
+              ),
+              onPressed: _isLoading ? null : () => _confirmBooking(payOnline: false),
+            ),
+            if (_isLoading)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, {bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: Colors.grey[600])),
+          Text(value, style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.normal, fontSize: isBold ? 16 : 14)),
+        ],
+      ),
+    );
+  }
+}

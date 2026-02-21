@@ -23,16 +23,24 @@ namespace ŠišAppApi.Services
         public async Task<TokenResponse?> Login(LoginRequest request)
         {
             var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Username == request.Username);
+                .FirstOrDefaultAsync(u => u.Username.ToLower() == request.Username.ToLower());
 
-            if (user == null || !VerifyPassword(request.Password, user.PasswordHash))
+            if (user == null)
             {
+                Console.WriteLine($"[Auth] User not found: {request.Username}");
+                return null;
+            }
+
+            if (!VerifyPassword(request.Password, user.PasswordHash))
+            {
+                Console.WriteLine($"[Auth] Password mismatch for user: {request.Username}");
                 return null;
             }
 
             user.LastLoginAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
+            Console.WriteLine($"[Auth] Login successful for: {request.Username}");
             return GenerateToken(user);
         }
 
@@ -77,7 +85,8 @@ namespace ŠišAppApi.Services
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Name, user.Username),
-                new Claim(ClaimTypes.Role, user.Role)
+                new Claim(ClaimTypes.Role, user.Role),
+                new Claim(ClaimTypes.Email, user.Email ?? "")
             };
 
             var token = new JwtSecurityToken(

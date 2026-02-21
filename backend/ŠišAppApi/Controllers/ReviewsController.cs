@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using ŠišAppApi.Data;
 using ŠišAppApi.Models;
 using ŠišAppApi.Models.DTOs;
+using ŠišAppApi.Filters;
 using System.Security.Claims;
 
 namespace ŠišAppApi.Controllers;
@@ -20,247 +21,288 @@ public class ReviewsController : ControllerBase
         _context = context;
     }
 
-    /* // Override-amo osnovne CRUD metode da ih sakrijemo
-    [ApiExplorerSettings(IgnoreApi = true)]
-    public override Task<ActionResult<IEnumerable<Review>>> GetAll()
+    private int GetUserId()
     {
-        return base.GetAll();
+        var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(claim))
+            throw new UserException("Korisnik nije autentificiran.");
+        return int.Parse(claim);
     }
 
-    [ApiExplorerSettings(IgnoreApi = true), NonAction]
-    public override Task<ActionResult<Review>> GetById(int id)
+    private ReviewDto MapToDto(Review r)
     {
-        return base.GetById(id);
-    }
-
-    [ApiExplorerSettings(IgnoreApi = true), NonAction]
-    public override Task<ActionResult<Review>> Create(Review entity)
-    {
-        return base.Create(entity);
-    }
-
-    [ApiExplorerSettings(IgnoreApi = true), NonAction] 
-    public override Task<IActionResult> Update(int id, Review entity)
-    {
-        return base.Update(id, entity);
-    }
-
-    [ApiExplorerSettings(IgnoreApi = true), NonAction]
-    public override Task<IActionResult> Delete(int id)
-    {
-        return base.Delete(id);
-    }
- */
-    [HttpPost("{appointmentId}/reviews")]
-    public async Task<IActionResult> CreateReview(int appointmentId, [FromBody] CreateReviewDto dto)
-    {
-        try
+        return new ReviewDto
         {
-            // Validacija modela
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(new { message = "Neispravni podaci", errors = ModelState.Values
-                    .SelectMany(v => v.Errors)
-                    .Select(e => e.ErrorMessage) });
-            }
+            Id = r.Id,
+            UserId = r.UserId,
+            UserName = r.User != null ? $"{r.User.FirstName} {r.User.LastName}" : "Anoniman korisnik",
+            BarberId = r.BarberId,
+            BarberName = r.Barber?.User != null ? $"{r.Barber.User.FirstName} {r.Barber.User.LastName}" : "Nepoznato",
+            SalonId = r.SalonId,
+            SalonName = r.Salon?.Name,
+            AppointmentId = r.AppointmentId,
+            ServiceName = r.Appointment?.Service?.Name,
+            Rating = r.Rating,
+            Comment = r.Comment ?? string.Empty,
+            CreatedAt = r.CreatedAt,
+            UpdatedAt = r.UpdatedAt,
+            HelpfulCount = r.HelpfulCount,
+            IsVerified = r.IsVerified,
+            BarberResponse = r.BarberResponse,
+            BarberRespondedAt = r.BarberRespondedAt
+        };
+    }
 
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userIdClaim))
-                return Unauthorized(new { message = "Korisnik nije autentificiran." });
+    private IQueryable<Review> IncludeAll()
+    {
+        return _context.Reviews
+            .Include(r => r.User)
+            .Include(r => r.Barber).ThenInclude(b => b.User)
+            .Include(r => r.Salon)
+            .Include(r => r.Appointment).ThenInclude(a => a.Service);
+    }
 
-            var userId = int.Parse(userIdClaim);
-            
-            // Provjeri postoji li već recenzija
-            var existing = await _context.Reviews
-                .FirstOrDefaultAsync(r => r.AppointmentId == appointmentId && r.UserId == userId);
+    [HttpPost]
+    public async Task<ActionResult<ReviewDto>> CreateReview([FromBody] CreateReviewDto dto)
+    {
+        var userId = GetUserId();
 
-            if (existing != null)
-                return BadRequest(new { message = "Recenzija već postoji za ovu rezervaciju." });
+        var existing = await _context.Reviews
+            .FirstOrDefaultAsync(r => r.AppointmentId == dto.AppointmentId && r.UserId == userId);
 
-            // Provjeri postoji li termin
-            var appointment = await _context.Appointments
-                .Include(a => a.Barber)
-                .FirstOrDefaultAsync(a => a.Id == appointmentId);
+        if (existing != null)
+            throw new UserException("Recenzija već postoji za ovu rezervaciju.");
 
-            if (appointment == null)
-                return NotFound(new { message = "Termin nije pronađen." });
+        var appointment = await _context.Appointments
+            .Include(a => a.Barber)
+            .Include(a => a.Service)
+            .FirstOrDefaultAsync(a => a.Id == dto.AppointmentId);
 
-            // Provjeri je li termin završen
-            if (appointment.Status != "Completed")
-                return BadRequest(new { message = "Možete ostaviti recenziju samo za završene termine." });
+        if (appointment == null)
+            throw new UserException("Termin nije pronađen.");
 
-            // Provjeri je li korisnik stvarno bio na tom terminu
-            if (appointment.UserId != userId)
-                return BadRequest(new { message = "Možete ostaviti recenziju samo za svoje termine." });
+        if (appointment.Status != "Completed" && appointment.PaymentStatus != "Paid")
+            throw new UserException("Možete ostaviti recenziju samo za završene ili plaćene termine.");
 
-            // Provjeri postoji li frizer
-            var barber = await _context.Barbers.FindAsync(dto.BarberId);
-            if (barber == null)
-                return NotFound(new { message = "Frizer nije pronađen." });
+        if (appointment.UserId != userId)
+            throw new UserException("Možete ostaviti recenziju samo za svoje termine.");
 
-            // Provjeri je li frizer stvarno radio taj termin
-            if (appointment.BarberId != dto.BarberId)
-                return BadRequest(new { message = "Navedeni frizer nije radio ovaj termin." });
+        if (appointment.BarberId != dto.BarberId)
+            throw new UserException("Navedeni frizer nije radio ovaj termin.");
 
-            var review = new Review
-            {
-                AppointmentId = appointmentId,
-                UserId = userId,
-                BarberId = dto.BarberId,
-                SalonId = appointment.SalonId,
-                Rating = dto.Rating,
-                Comment = dto.Comment,
-                IsVerified = false,
-                IsHidden = false,
-                HelpfulCount = 0,
-                CreatedAt = DateTime.UtcNow
-            };
+        var review = new Review
+        {
+            AppointmentId = dto.AppointmentId,
+            UserId = userId,
+            BarberId = dto.BarberId,
+            SalonId = appointment.SalonId,
+            Rating = dto.Rating,
+            Comment = dto.Comment,
+            IsVerified = false,
+            IsHidden = false,
+            HelpfulCount = 0,
+            CreatedAt = DateTime.UtcNow
+        };
 
-            _context.Reviews.Add(review);
+        _context.Reviews.Add(review);
 
-            // Ažuriraj prosječnu ocjenu frizera
+        // Update barber average rating
+        var barber = await _context.Barbers.FindAsync(dto.BarberId);
+        if (barber != null)
+        {
             var barberReviews = await _context.Reviews
                 .Where(r => r.BarberId == dto.BarberId)
                 .ToListAsync();
-
-            barber.Rating = (float)barberReviews.Average(r => r.Rating);
-            barber.ReviewCount = barberReviews.Count;
-
-            await _context.SaveChangesAsync();
-
-            return Ok(new { 
-                message = "Recenzija uspješno kreirana",
-                review = new {
-                    id = review.Id,
-                    rating = review.Rating,
-                    comment = review.Comment,
-                    createdAt = review.CreatedAt
-                }
-            });
+            var allRatings = barberReviews.Select(r => r.Rating).Append(dto.Rating).ToList();
+            barber.Rating = allRatings.Average();
+            barber.ReviewCount = allRatings.Count;
         }
-        catch (Exception ex)
+
+        // Update salon average rating
+        var salon = await _context.Salons.FindAsync(appointment.SalonId);
+        if (salon != null)
         {
-            return StatusCode(500, new { message = "Greška pri kreiranju recenzije", error = ex.Message });
+            var salonReviews = await _context.Reviews
+                .Where(r => r.SalonId == appointment.SalonId)
+                .ToListAsync();
+            var allRatings = salonReviews.Select(r => r.Rating).Append(dto.Rating).ToList();
+            salon.Rating = allRatings.Average();
         }
+
+        await _context.SaveChangesAsync();
+
+        var created = await IncludeAll().FirstOrDefaultAsync(r => r.Id == review.Id);
+        return Ok(MapToDto(created!));
+    }
+
+    [HttpPut("{id}")]
+    public async Task<ActionResult<ReviewDto>> UpdateReview(int id, [FromBody] CreateReviewDto dto)
+    {
+        var userId = GetUserId();
+
+        var review = await _context.Reviews.FirstOrDefaultAsync(r => r.Id == id);
+        if (review == null)
+            throw new UserException("Recenzija nije pronađena.");
+
+        if (review.UserId != userId)
+            throw new UserException("Možete ažurirati samo svoje recenzije.");
+
+        review.Rating = dto.Rating;
+        review.Comment = dto.Comment;
+        review.UpdatedAt = DateTime.UtcNow;
+
+        // Recalculate barber rating
+        var barber = await _context.Barbers.FindAsync(review.BarberId);
+        if (barber != null)
+        {
+            var barberReviews = await _context.Reviews
+                .Where(r => r.BarberId == review.BarberId)
+                .ToListAsync();
+            barber.Rating = barberReviews.Select(r => r.Id == id ? dto.Rating : r.Rating).Average();
+            barber.ReviewCount = barberReviews.Count;
+        }
+
+        if (review.SalonId.HasValue)
+        {
+            var salon = await _context.Salons.FindAsync(review.SalonId);
+            if (salon != null)
+            {
+                var salonReviews = await _context.Reviews
+                    .Where(r => r.SalonId == review.SalonId)
+                    .ToListAsync();
+                salon.Rating = salonReviews.Select(r => r.Id == id ? dto.Rating : r.Rating).Average();
+            }
+        }
+
+        await _context.SaveChangesAsync();
+
+        var updated = await IncludeAll().FirstOrDefaultAsync(r => r.Id == id);
+        return Ok(MapToDto(updated!));
+    }
+
+    [HttpGet("my-reviews")]
+    public async Task<ActionResult<List<ReviewDto>>> GetMyReviews()
+    {
+        var userId = GetUserId();
+
+        var reviews = await IncludeAll()
+            .Where(r => r.UserId == userId && !r.IsHidden)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync();
+
+        return Ok(reviews.Select(MapToDto).ToList());
+    }
+
+    /// <summary>
+    /// Get reviews for the currently logged-in barber
+    /// </summary>
+    [HttpGet("barber-reviews")]
+    public async Task<ActionResult<List<ReviewDto>>> GetMyBarberReviews()
+    {
+        var userId = GetUserId();
+
+        var barber = await _context.Barbers.FirstOrDefaultAsync(b => b.UserId == userId);
+        if (barber == null)
+            throw new UserException("Niste registrirani kao frizer.");
+
+        var reviews = await IncludeAll()
+            .Where(r => r.BarberId == barber.Id && !r.IsHidden)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync();
+
+        return Ok(reviews.Select(MapToDto).ToList());
+    }
+
+    /// <summary>
+    /// Barber responds to a review
+    /// </summary>
+    [HttpPut("{id}/respond")]
+    public async Task<ActionResult<ReviewDto>> RespondToReview(int id, [FromBody] ReviewResponseDto dto)
+    {
+        var userId = GetUserId();
+
+        var barber = await _context.Barbers.FirstOrDefaultAsync(b => b.UserId == userId);
+        if (barber == null)
+            throw new UserException("Niste registrirani kao frizer.");
+
+        var review = await _context.Reviews.FirstOrDefaultAsync(r => r.Id == id);
+        if (review == null)
+            throw new UserException("Recenzija nije pronađena.");
+
+        if (review.BarberId != barber.Id)
+            throw new UserException("Možete odgovoriti samo na svoje recenzije.");
+
+        review.BarberResponse = dto.Response;
+        review.BarberRespondedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        var updated = await IncludeAll().FirstOrDefaultAsync(r => r.Id == id);
+        return Ok(MapToDto(updated!));
     }
 
     [AllowAnonymous]
     [HttpGet("barber/{barberId}")]
-    public async Task<IActionResult> GetReviewsForBarber(int barberId)
+    public async Task<ActionResult<List<ReviewDto>>> GetReviewsForBarber(int barberId)
     {
-        try
-        {
-            var reviews = await _context.Reviews
-                .Include(r => r.User)
-                .Where(r => r.BarberId == barberId && !r.IsHidden)
-                .OrderByDescending(r => r.CreatedAt)
-                .Select(r => new ReviewDto
-                {
-                    Id = r.Id,
-                    UserName = r.User != null ? $"{r.User.FirstName} {r.User.LastName}" : "Anoniman korisnik",
-                    Rating = r.Rating,
-                    Comment = r.Comment ?? string.Empty,
-                    CreatedAt = r.CreatedAt,
-                    HelpfulCount = r.HelpfulCount
-                })
-                .ToListAsync();
+        var reviews = await IncludeAll()
+            .Where(r => r.BarberId == barberId && !r.IsHidden)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync();
 
-            return Ok(reviews);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { message = "Greška pri dohvaćanju recenzija", error = ex.Message });
-        }
+        return Ok(reviews.Select(MapToDto).ToList());
     }
 
     [AllowAnonymous]
     [HttpGet("salon/{salonId}")]
-    public async Task<IActionResult> GetReviewsForSalon(int salonId)
+    public async Task<ActionResult<List<ReviewDto>>> GetReviewsForSalon(int salonId)
     {
-        try
-        {
-            var reviews = await _context.Reviews
-                .Include(r => r.User)
-                .Where(r => r.SalonId == salonId && !r.IsHidden)
-                .OrderByDescending(r => r.CreatedAt)
-                .Select(r => new ReviewDto
-                {
-                    Id = r.Id,
-                    UserName = r.User != null ? $"{r.User.FirstName} {r.User.LastName}" : "Anoniman korisnik",
-                    Rating = r.Rating,
-                    Comment = r.Comment ?? string.Empty,
-                    CreatedAt = r.CreatedAt,
-                    HelpfulCount = r.HelpfulCount
-                })
-                .ToListAsync();
+        var reviews = await IncludeAll()
+            .Where(r => r.SalonId == salonId && !r.IsHidden)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync();
 
-            return Ok(reviews);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { message = "Greška pri dohvaćanju recenzija", error = ex.Message });
-        }
+        return Ok(reviews.Select(MapToDto).ToList());
     }
 
     [HttpPost("{id}/helpful")]
     public async Task<IActionResult> MarkAsHelpful(int id)
     {
-        try
-        {
-            var review = await _context.Reviews.FindAsync(id);
-            if (review == null)
-                return NotFound(new { message = "Recenzija nije pronađena." });
+        var review = await _context.Reviews.FindAsync(id);
+        if (review == null)
+            throw new UserException("Recenzija nije pronađena.");
 
-            review.HelpfulCount++;
-            await _context.SaveChangesAsync();
+        review.HelpfulCount++;
+        await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Recenzija označena kao korisna." });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { message = "Greška pri označavanju recenzije", error = ex.Message });
-        }
+        return Ok(new { message = "Recenzija označena kao korisna." });
     }
 
     [Authorize(Roles = "Admin")]
     [HttpPut("{id}/verify")]
     public async Task<IActionResult> VerifyReview(int id)
     {
-        try
-        {
-            var review = await _context.Reviews.FindAsync(id);
-            if (review == null)
-                return NotFound(new { message = "Recenzija nije pronađena." });
+        var review = await _context.Reviews.FindAsync(id);
+        if (review == null)
+            throw new UserException("Recenzija nije pronađena.");
 
-            review.IsVerified = true;
-            await _context.SaveChangesAsync();
+        review.IsVerified = true;
+        await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Recenzija je verificirana." });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { message = "Greška pri verifikaciji recenzije", error = ex.Message });
-        }
+        return Ok(new { message = "Recenzija je verificirana." });
     }
 
     [Authorize(Roles = "Admin")]
     [HttpPut("{id}/hide")]
     public async Task<IActionResult> HideReview(int id)
     {
-        try
-        {
-            var review = await _context.Reviews.FindAsync(id);
-            if (review == null)
-                return NotFound(new { message = "Recenzija nije pronađena." });
+        var review = await _context.Reviews.FindAsync(id);
+        if (review == null)
+            throw new UserException("Recenzija nije pronađena.");
 
-            review.IsHidden = true;
-            await _context.SaveChangesAsync();
+        review.IsHidden = true;
+        await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Recenzija je sakrivena." });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { message = "Greška pri sakrivanju recenzije", error = ex.Message });
-        }
+        return Ok(new { message = "Recenzija je sakrivena." });
     }
-} 
+}

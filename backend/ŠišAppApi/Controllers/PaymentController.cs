@@ -7,6 +7,7 @@ using System.ComponentModel.DataAnnotations;
 using ŠišAppApi.Data;
 using ŠišAppApi.Models;
 using Microsoft.EntityFrameworkCore;
+using ŠišAppApi.Services; // Added for IEmailService and INotificationService
 
 namespace ŠišAppApi.Controllers;
 
@@ -16,11 +17,15 @@ public class PaymentController : ControllerBase
 {
     private readonly IConfiguration _configuration;
     private readonly ApplicationDbContext _context;
+    private readonly IEmailService _emailService;
+    private readonly INotificationService _notificationService;
 
-    public PaymentController(IConfiguration configuration, ApplicationDbContext context)
+    public PaymentController(IConfiguration configuration, ApplicationDbContext context, IEmailService emailService, INotificationService notificationService)
     {
         _configuration = configuration;
         _context = context;
+        _emailService = emailService;
+        _notificationService = notificationService;
     }
 
     [HttpPost("create-checkout-session")]
@@ -30,7 +35,7 @@ public class PaymentController : ControllerBase
         {
             var options = new SessionCreateOptions
             {
-                PaymentMethodTypes = new List<string> { "card" },
+                PaymentMethodTypes = new List<string> { "card", "paypal" },
                 LineItems = new List<SessionLineItemOptions>
                 {
                     new SessionLineItemOptions
@@ -62,6 +67,17 @@ public class PaymentController : ControllerBase
             var service = new SessionService();
             var session = await service.CreateAsync(options);
 
+            // Save Session ID to Appointment
+            if (request.AppointmentId.HasValue)
+            {
+                var appointment = await _context.Appointments.FindAsync(request.AppointmentId.Value);
+                if (appointment != null)
+                {
+                    appointment.StripeSessionId = session.Id;
+                    await _context.SaveChangesAsync();
+                }
+            }
+
             return Ok(new { sessionId = session.Id, url = session.Url });
         }
         catch (StripeException ex)
@@ -72,6 +88,85 @@ public class PaymentController : ControllerBase
         {
             return StatusCode(500, new { error = $"Greška prilikom kreiranja checkout sesije: {ex.Message}" });
         }
+    }
+
+    [HttpGet("check-status/{appointmentId}")]
+    public async Task<IActionResult> CheckPaymentStatus(int appointmentId)
+    {
+        var appointment = await _context.Appointments.FindAsync(appointmentId);
+        if (appointment == null) return NotFound(new { error = "Appointment not found" });
+
+        if (appointment.PaymentStatus == "Paid")
+        {
+            return Ok(new { status = "Paid" });
+        }
+
+        if (string.IsNullOrEmpty(appointment.StripeSessionId))
+        {
+             return Ok(new { status = "Pending" });
+        }
+
+        // Verify with Stripe
+        try
+        {
+            var service = new SessionService();
+            var session = await service.GetAsync(appointment.StripeSessionId);
+
+            if (session.PaymentStatus == "paid")
+            {
+                appointment.PaymentStatus = "Paid";
+                
+                // Ensure Payment record exists
+                var existingPayment = await _context.Payments.AnyAsync(p => p.AppointmentId == appointmentId);
+                if (!existingPayment)
+                {
+                     var payment = new Payment
+                     {
+                         AppointmentId = appointmentId,
+                         UserId = appointment.UserId,
+                         Amount = (decimal)(session.AmountTotal ?? 0) / 100m,
+                         Currency = session.Currency,
+                         Method = "Stripe",
+                         TransactionId = session.PaymentIntentId ?? session.Id,
+                         Status = "Completed",
+                         CreatedAt = DateTime.UtcNow
+                     };
+                     _context.Payments.Add(payment);
+                }
+
+                await _context.SaveChangesAsync();
+
+                // Send Notification and Email
+                try
+                {
+                    var paymentRecord = await _context.Payments.FirstOrDefaultAsync(p => p.AppointmentId == appointmentId);
+                    await _notificationService.CreateNotification(
+                        appointment.UserId,
+                        $"Uspješno ste platili rezervaciju termina za {appointment.AppointmentDateTime:dd.MM.yyyy HH:mm}.",
+                        "Payment",
+                        paymentRecord?.Id.ToString());
+
+                    var user = await _context.Users.FindAsync(appointment.UserId);
+                    if (user != null && !string.IsNullOrEmpty(user.Email))
+                    {
+                        await _emailService.SendEmailAsync(user.Email, "Potvrda rezervacije - ŠišApp",
+                            $"<h1>Rezervacija potvrđena!</h1><p>Poštovani/a {user.FirstName},</p><p>Vaša rezervacija za termin <strong>{appointment.AppointmentDateTime:dd.MM.yyyy HH:mm}</strong> je uspješno plaćena.</p><p>Hvala na povjerenju!</p>");
+                    }
+                }
+                catch (Exception notifEx)
+                {
+                    Console.WriteLine($"Error sending notification/email from check-status: {notifEx.Message}");
+                }
+
+                return Ok(new { status = "Paid" });
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error checking Stripe status: {ex.Message}");
+        }
+
+        return Ok(new { status = "Pending" });
     }
 
     [HttpPost("webhook")]
@@ -122,6 +217,24 @@ public class PaymentController : ControllerBase
                                  };
                                  _context.Payments.Add(payment);
                                  await _context.SaveChangesAsync();
+
+                                 // Send Notification and Email
+                                 try 
+                                 {
+                                     await _notificationService.CreateNotification(appointment.UserId, $"Uspješno ste platili rezervaciju termina za {appointment.AppointmentDateTime:dd.MM.yyyy HH:mm}.", "Payment", payment.Id.ToString());
+                                     
+                                     // Fetch user email if not loaded
+                                     var user = await _context.Users.FindAsync(appointment.UserId);
+                                     if (user != null && !string.IsNullOrEmpty(user.Email))
+                                     {
+                                         await _emailService.SendEmailAsync(user.Email, "Potvrda rezervacije - ŠišApp", 
+                                             $"<h1>Rezervacija potvrđena!</h1><p>Poštovani/a {user.FirstName},</p><p>Vaša rezervacija za termin <strong>{appointment.AppointmentDateTime:dd.MM.yyyy HH:mm}</strong> je uspješno plaćena.</p><p>Hvala na povjerenju!</p>");
+                                     }
+                                 }
+                                 catch (Exception ex)
+                                 {
+                                     Console.WriteLine($"Error sending notification/email: {ex.Message}");
+                                 }
                              }
                         }
                     }
@@ -150,7 +263,76 @@ public class PaymentController : ControllerBase
             return StatusCode(500, new { error = $"Greška prilikom obrade webhook-a: {ex.Message}" });
         }
     }
+    [HttpGet("success")]
+    public ContentResult PaymentSuccess()
+    {
+        var html = @"
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset='UTF-8'>
+                <title>Plaćanje Uspješno</title>
+                <style>
+                    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding: 50px; background-color: #f4f4f9; }
+                    .container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-width: 500px; margin: auto; }
+                    .success { color: #4CAF50; font-size: 2.5em; margin-bottom: 10px; }
+                    p { color: #555; font-size: 1.1em; }
+                    .icon { font-size: 4em; color: #4CAF50; margin-bottom: 20px; }
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <div class='icon'>✅</div>
+                    <h1 class='success'>Plaćanje Uspješno!</h1>
+                    <p>Vaša rezervacija je potvrđena i plaćena.</p>
+                    <p>Možete zatvoriti ovaj prozor i vratiti se u aplikaciju.</p>
+                </div>
+            </body>
+            </html>";
+            
+        return new ContentResult
+        {
+            Content = html,
+            ContentType = "text/html; charset=utf-8"
+        };
+    }
+
+    [HttpGet("cancel")]
+    public ContentResult PaymentCancel()
+    {
+        var html = @"
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset='UTF-8'>
+                <title>Plaćanje Otkazano</title>
+                <style>
+                    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding: 50px; background-color: #f4f4f9; }
+                    .container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-width: 500px; margin: auto; }
+                    .error { color: #f44336; font-size: 2.5em; margin-bottom: 10px; }
+                    p { color: #555; font-size: 1.1em; }
+                    .icon { font-size: 4em; color: #f44336; margin-bottom: 20px; }
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <div class='icon'>❌</div>
+                    <h1 class='error'>Plaćanje Otkazano!</h1>
+                    <p>Niste izvršili plaćanje.</p>
+                    <p>Možete zatvoriti ovaj prozor i pokušati ponovo u aplikaciji.</p>
+                </div>
+            </body>
+            </html>";
+
+        return new ContentResult
+        {
+            Content = html,
+            ContentType = "text/html; charset=utf-8"
+        };
+    }
 }
+
+
 
 public class CheckoutSessionRequest
 {

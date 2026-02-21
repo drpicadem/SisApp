@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/salon_provider.dart';
 import '../models/salon.dart';
+import 'notifications_screen.dart';
+import 'appointments_screen.dart';
+import 'my_reviews_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   @override
@@ -10,6 +13,7 @@ class CustomerHomeScreen extends StatefulWidget {
 }
 
 class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
+  int _currentIndex = 0;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
@@ -28,15 +32,55 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          _buildHomeTab(),
+          AppointmentsScreen(),
+          _buildProfileTab(),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        selectedItemColor: Colors.blue.shade700,
+        unselectedItemColor: Colors.grey,
+        items: [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Početna',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.receipt_long),
+            label: 'Moje Narudžbe',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Profil',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHomeTab() {
+    return Scaffold(
       appBar: AppBar(
         title: Text('ŠišApp'),
         centerTitle: true,
+        automaticallyImplyLeading: false,
         actions: [
           IconButton(
-            icon: Icon(Icons.exit_to_app),
+            icon: Icon(Icons.notifications),
             onPressed: () {
-              context.read<AuthProvider>().logout();
-              Navigator.pushReplacementNamed(context, '/login');
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => NotificationsScreen()),
+              );
             },
           ),
         ],
@@ -74,6 +118,109 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
+  Widget _buildProfileTab() {
+    final authProvider = Provider.of<AuthProvider>(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Profil'),
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+      ),
+      body: ListView(
+        padding: EdgeInsets.all(16),
+        children: [
+          SizedBox(height: 24),
+          CircleAvatar(
+            radius: 50,
+            backgroundColor: Colors.blue.shade100,
+            child: Icon(Icons.person, size: 50, color: Colors.blue.shade700),
+          ),
+          SizedBox(height: 16),
+          Text(
+            authProvider.username ?? 'Korisnik',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          if (authProvider.email != null)
+            Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text(
+                authProvider.email!,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
+            ),
+          SizedBox(height: 8),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              authProvider.role ?? 'Korisnik',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.w500),
+            ),
+          ),
+          SizedBox(height: 32),
+          Divider(),
+          ListTile(
+            leading: Icon(Icons.notifications_outlined),
+            title: Text('Obavještenja'),
+            trailing: Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => NotificationsScreen()),
+              );
+            },
+          ),
+          Divider(),
+          ListTile(
+            leading: Icon(Icons.add_circle_outline),
+            title: Text('Rezervišite termin'),
+            trailing: Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.pushNamed(context, '/booking');
+            },
+          ),
+          Divider(),
+          ListTile(
+            leading: Icon(Icons.rate_review_outlined),
+            title: Text('Moje Recenzije'),
+            trailing: Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => MyReviewsScreen()),
+              );
+            },
+          ),
+          Divider(),
+          SizedBox(height: 24),
+          ElevatedButton.icon(
+            icon: Icon(Icons.logout),
+            label: Text('Odjavi se'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade50,
+              foregroundColor: Colors.red,
+              padding: EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: () {
+              context.read<AuthProvider>().logout();
+              Navigator.pushReplacementNamed(context, '/login');
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSearchBar() {
     return Padding(
       padding: EdgeInsets.all(16.0),
@@ -105,13 +252,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
       child: InkWell(
         onTap: () {
-           // Navigate to Salon Details
            Navigator.pushNamed(context, '/salon-details', arguments: salon);
         },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Placeholder Image
             Container(
               height: 150,
               decoration: BoxDecoration(

@@ -55,6 +55,10 @@ public class Review
     
     public DateTime? UpdatedAt { get; set; }
     
+    public string? BarberResponse { get; set; }
+    
+    public DateTime? BarberRespondedAt { get; set; }
+    
     public bool IsDeleted { get; set; } = false;
     
     public DateTime? DeletedAt { get; set; }

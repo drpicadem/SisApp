@@ -1,12 +1,16 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ŠišAppApi.Data;
 using ŠišAppApi.Models;
+using ŠišAppApi.Filters;
+using System.Security.Claims;
 
 namespace ŠišAppApi.Controllers;
 
-[Route("api/[controller]")]
+[Authorize]
 [ApiController]
+[Route("api/[controller]")]
 public class WorkingHoursController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
@@ -16,85 +20,146 @@ public class WorkingHoursController : ControllerBase
         _context = context;
     }
 
-    // GET: api/WorkingHours
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<WorkingHours>>> GetWorkingHours()
+    private int GetUserId()
     {
-        return await _context.WorkingHours.ToListAsync();
+        var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(claim))
+            throw new UserException("Korisnik nije autentificiran.");
+        return int.Parse(claim);
     }
 
-    // GET: api/WorkingHours/5
-    [HttpGet("{id}")]
-    public async Task<ActionResult<WorkingHours>> GetWorkingHour(int id)
+    private async Task<Barber> GetCurrentBarber()
     {
-        var workingHour = await _context.WorkingHours.FindAsync(id);
-
-        if (workingHour == null)
-        {
-            return NotFound();
-        }
-
-        return workingHour;
+        var userId = GetUserId();
+        var barber = await _context.Barbers.FirstOrDefaultAsync(b => b.UserId == userId);
+        if (barber == null)
+            throw new UserException("Niste registrirani kao frizer.");
+        return barber;
     }
 
-    // POST: api/WorkingHours
+    /// <summary>
+    /// Get working hours for the currently logged-in barber
+    /// </summary>
+    [HttpGet("my-schedule")]
+    public async Task<ActionResult<List<WorkingHours>>> GetMySchedule()
+    {
+        var barber = await GetCurrentBarber();
+
+        var schedule = await _context.WorkingHours
+            .Where(wh => wh.BarberId == barber.Id && !wh.IsDeleted)
+            .OrderBy(wh => wh.DayOfWeek)
+            .ThenBy(wh => wh.StartTime)
+            .ToListAsync();
+
+        return Ok(schedule);
+    }
+
+    /// <summary>
+    /// Get working hours for a specific barber (public)
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("barber/{barberId}")]
+    public async Task<ActionResult<List<WorkingHours>>> GetBarberSchedule(int barberId)
+    {
+        var schedule = await _context.WorkingHours
+            .Where(wh => wh.BarberId == barberId && !wh.IsDeleted && wh.IsWorking)
+            .OrderBy(wh => wh.DayOfWeek)
+            .ThenBy(wh => wh.StartTime)
+            .ToListAsync();
+
+        return Ok(schedule);
+    }
+
+    /// <summary>
+    /// Create working hours for the logged-in barber
+    /// </summary>
     [HttpPost]
-    public async Task<ActionResult<WorkingHours>> PostWorkingHour(WorkingHours workingHour)
+    public async Task<ActionResult<WorkingHours>> CreateWorkingHours([FromBody] WorkingHoursCreateDto dto)
     {
-        _context.WorkingHours.Add(workingHour);
+        var barber = await GetCurrentBarber();
+
+        // Check for overlapping hours on same day
+        var existing = await _context.WorkingHours
+            .FirstOrDefaultAsync(wh => wh.BarberId == barber.Id
+                && wh.DayOfWeek == dto.DayOfWeek
+                && !wh.IsDeleted);
+
+        if (existing != null)
+            throw new UserException("Već imate definirano radno vrijeme za taj dan. Uredite postojeće.");
+
+        var workingHours = new WorkingHours
+        {
+            BarberId = barber.Id,
+            DayOfWeek = dto.DayOfWeek,
+            StartTime = dto.StartTime,
+            EndTime = dto.EndTime,
+            IsWorking = dto.IsWorking,
+            Notes = dto.Notes,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.WorkingHours.Add(workingHours);
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction("GetWorkingHour", new { id = workingHour.Id }, workingHour);
+        return Ok(workingHours);
     }
 
-    // PUT: api/WorkingHours/5
+    /// <summary>
+    /// Update working hours (barber can only update own)
+    /// </summary>
     [HttpPut("{id}")]
-    public async Task<IActionResult> PutWorkingHour(int id, WorkingHours workingHour)
+    public async Task<ActionResult<WorkingHours>> UpdateWorkingHours(int id, [FromBody] WorkingHoursCreateDto dto)
     {
-        if (id != workingHour.Id)
-        {
-            return BadRequest();
-        }
+        var barber = await GetCurrentBarber();
 
-        _context.Entry(workingHour).State = EntityState.Modified;
+        var workingHours = await _context.WorkingHours.FindAsync(id);
+        if (workingHours == null)
+            throw new UserException("Radno vrijeme nije pronađeno.");
 
-        try
-        {
-            await _context.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            if (!WorkingHourExists(id))
-            {
-                return NotFound();
-            }
-            else
-            {
-                throw;
-            }
-        }
+        if (workingHours.BarberId != barber.Id)
+            throw new UserException("Možete ažurirati samo svoje radno vrijeme.");
 
-        return NoContent();
-    }
+        workingHours.DayOfWeek = dto.DayOfWeek;
+        workingHours.StartTime = dto.StartTime;
+        workingHours.EndTime = dto.EndTime;
+        workingHours.IsWorking = dto.IsWorking;
+        workingHours.Notes = dto.Notes;
+        workingHours.UpdatedAt = DateTime.UtcNow;
 
-    // DELETE: api/WorkingHours/5
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteWorkingHour(int id)
-    {
-        var workingHour = await _context.WorkingHours.FindAsync(id);
-        if (workingHour == null)
-        {
-            return NotFound();
-        }
-
-        _context.WorkingHours.Remove(workingHour);
         await _context.SaveChangesAsync();
 
-        return NoContent();
+        return Ok(workingHours);
     }
 
-    private bool WorkingHourExists(int id)
+    /// <summary>
+    /// Delete (soft) working hours (barber can only delete own)
+    /// </summary>
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteWorkingHours(int id)
     {
-        return _context.WorkingHours.Any(e => e.Id == id);
+        var barber = await GetCurrentBarber();
+
+        var workingHours = await _context.WorkingHours.FindAsync(id);
+        if (workingHours == null)
+            throw new UserException("Radno vrijeme nije pronađeno.");
+
+        if (workingHours.BarberId != barber.Id)
+            throw new UserException("Možete obrisati samo svoje radno vrijeme.");
+
+        workingHours.IsDeleted = true;
+        workingHours.DeletedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Radno vrijeme obrisano." });
     }
-} 
+}
+
+public class WorkingHoursCreateDto
+{
+    public int DayOfWeek { get; set; } // 0 = Sunday, 6 = Saturday
+    public TimeSpan StartTime { get; set; }
+    public TimeSpan EndTime { get; set; }
+    public bool IsWorking { get; set; } = true;
+    public string? Notes { get; set; }
+}

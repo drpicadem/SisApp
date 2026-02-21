@@ -54,85 +54,109 @@ namespace ŠišAppApi.Data
                     };
                     context.Salons.Add(salon);
                     context.SaveChanges();
+                }
 
-                    if (!context.Users.Any())
+                // Ensure "desktop" user exists
+                if (!context.Users.Any(u => u.Username == "desktop"))
+                {
+                     var passwordHash = BCrypt.Net.BCrypt.HashPassword("test");
+                     var adminUser = new User
+                     {
+                         Username = "desktop",
+                         Email = "desktop@sisapp.com",
+                         PasswordHash = passwordHash,
+                         FirstName = "Admin",
+                         LastName = "User",
+                         Role = "Admin",
+                         IsActive = true,
+                         CreatedAt = DateTime.UtcNow, 
+                         IsEmailVerified = true
+                     };
+                     context.Users.Add(adminUser);
+                     context.SaveChanges();
+
+                     var adminProfile = new Admin
+                     {
+                         UserId = adminUser.Id,
+                         Role = "SuperAdmin",
+                         IsSuperAdmin = true,
+                         CreatedAt = DateTime.UtcNow
+                     };
+                     context.Admins.Add(adminProfile);
+                     context.SaveChanges();
+                }
+
+                // Ensure "mobile" user exists or update email
+                var mobileUser = context.Users.FirstOrDefault(u => u.Username == "mobile");
+                if (mobileUser == null)
+                {
+                     var passwordHash = BCrypt.Net.BCrypt.HashPassword("test");
+                     mobileUser = new User
+                     {
+                         Username = "mobile",
+                         Email = "ademtolja123@gmail.com",
+                         PasswordHash = passwordHash,
+                         FirstName = "Mobile",
+                         LastName = "User",
+                         Role = "User",
+                         IsActive = true,
+                         CreatedAt = DateTime.UtcNow,
+                         IsEmailVerified = true
+                     };
+                     context.Users.Add(mobileUser);
+                     context.SaveChanges();
+
+                     var customerProfile = new Customer
+                     {
+                         UserId = mobileUser.Id,
+                         CreatedAt = DateTime.UtcNow
+                     };
+                     context.Customers.Add(customerProfile);
+                     context.SaveChanges();
+                }
+                else
+                {
+                    // Update email if it changed
+                    if (mobileUser.Email != "ademtolja123@gmail.com")
                     {
-                        var passwordHash = BCrypt.Net.BCrypt.HashPassword("test");
-
-                        // 1. Desktop User (Admin)
-                        var adminUser = new User
-                        {
-                            Username = "desktop",
-                            Email = "desktop@sisapp.com",
-                            PasswordHash = passwordHash,
-                            FirstName = "Admin",
-                            LastName = "User",
-                            Role = "Admin",
-                            IsActive = true,
-                            CreatedAt = DateTime.UtcNow, 
-                            IsEmailVerified = true
-                        };
-                        context.Users.Add(adminUser);
-                        context.SaveChanges(); // Save to get Id
-
-                        var adminProfile = new Admin
-                        {
-                            UserId = adminUser.Id,
-                            Role = "SuperAdmin",
-                            IsSuperAdmin = true,
-                            CreatedAt = DateTime.UtcNow
-                        };
-                        context.Admins.Add(adminProfile);
-
-                        // 2. Mobile User (Customer)
-                        var mobileUser = new User
-                        {
-                            Username = "mobile",
-                            Email = "mobile@sisapp.com",
-                            PasswordHash = passwordHash,
-                            FirstName = "Mobile",
-                            LastName = "User",
-                            Role = "User",
-                            IsActive = true,
-                            CreatedAt = DateTime.UtcNow,
-                            IsEmailVerified = true
-                        };
-                        context.Users.Add(mobileUser);
+                        mobileUser.Email = "ademtolja123@gmail.com";
+                        context.Users.Update(mobileUser);
                         context.SaveChanges();
+                    }
+                }
 
-                        var customerProfile = new Customer
-                        {
-                            UserId = mobileUser.Id,
-                            CreatedAt = DateTime.UtcNow
-                        };
-                        context.Customers.Add(customerProfile);
+                // Ensure "barber" user exists
+                if (!context.Users.Any(u => u.Username == "barber"))
+                {
+                     var passwordHash = BCrypt.Net.BCrypt.HashPassword("test");
+                     var barberUser = new User
+                     {
+                         Username = "barber",
+                         Email = "barber@sisapp.com",
+                         PasswordHash = passwordHash,
+                         FirstName = "Barber",
+                         LastName = "User",
+                         Role = "Barber",
+                         IsActive = true,
+                         CreatedAt = DateTime.UtcNow,
+                         IsEmailVerified = true
+                     };
+                     context.Users.Add(barberUser);
+                     context.SaveChanges();
 
-                        // 3. Barber User (Owner) - For testing
-                        var barberUser = new User
-                        {
-                            Username = "barber",
-                            Email = "barber@sisapp.com",
-                            PasswordHash = passwordHash,
-                            FirstName = "Barber",
-                            LastName = "User",
-                            Role = "Barber",
-                            IsActive = true,
-                            CreatedAt = DateTime.UtcNow,
-                            IsEmailVerified = true
-                        };
-                        context.Users.Add(barberUser);
-                        context.SaveChanges();
-                        
+                     var salon = context.Salons.FirstOrDefault();
+                     if (salon != null)
+                     {
                         var barberProfile = new Barber
                         {
-                             UserId = barberUser.Id,
-                             SalonId = salon.Id,
-                             Bio = "Expert Barber",
-                             CreatedAt = DateTime.UtcNow
+                                UserId = barberUser.Id,
+                                SalonId = salon.Id,
+                                Bio = "Expert Barber",
+                                CreatedAt = DateTime.UtcNow
                         };
                         context.Barbers.Add(barberProfile);
                         context.SaveChanges();
-                    }
+                     }
                 }
 
                 // Separate check for WorkingHours to ensure they are added even if users exist

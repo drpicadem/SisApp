@@ -200,6 +200,9 @@ namespace ŠišAppApi.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("StripeSessionId")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
@@ -777,6 +780,12 @@ namespace ŠišAppApi.Migrations
                     b.Property<int>("BarberId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("BarberRespondedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("BarberResponse")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Comment")
                         .HasColumnType("nvarchar(max)");
 
@@ -1317,7 +1326,7 @@ namespace ŠišAppApi.Migrations
                     b.HasOne("ŠišAppApi.Models.User", "User")
                         .WithOne("Admin")
                         .HasForeignKey("ŠišAppApi.Models.Admin", "UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("User");
@@ -1392,7 +1401,7 @@ namespace ŠišAppApi.Migrations
                     b.HasOne("ŠišAppApi.Models.User", "User")
                         .WithOne("Barber")
                         .HasForeignKey("ŠišAppApi.Models.Barber", "UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Salon");
@@ -1424,7 +1433,7 @@ namespace ŠišAppApi.Migrations
                     b.HasOne("ŠišAppApi.Models.User", "User")
                         .WithOne("Customer")
                         .HasForeignKey("ŠišAppApi.Models.Customer", "UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("User");

@@ -6,10 +6,12 @@ import '../providers/barber_provider.dart';
 import '../providers/service_provider.dart';
 import '../providers/booking_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/payment_provider.dart';
 import '../models/salon.dart';
 import '../models/barber.dart';
 import '../models/service.dart';
 import '../models/appointment.dart';
+import 'user/reservation_review_screen.dart';
 
 class BookingScreen extends StatefulWidget {
   @override
@@ -221,7 +223,7 @@ class _BookingScreenState extends State<BookingScreen> {
      );
   }
 
-  void _confirmBooking() async {
+  void _confirmBooking() {
     // Parse time
     final timeParts = _selectedTimeSlot!.split(':');
     final hour = int.parse(timeParts[0]);
@@ -235,18 +237,9 @@ class _BookingScreenState extends State<BookingScreen> {
       minute,
     );
 
-    // Get current user ID (decode from token again or store in AuthProvider)
-    // For now assuming AuthProvider has userId or we decode it. 
-    // Actually AuthProvider doesn't have ID yet. We need it.
-    // Let's check token decoding in AuthProvider. We only got role. 
-    // We need 'nameid' or 'sub' for User ID.
-    
-    // TEMPORARY: I will fetch user Id from AuthProvider next.
-    // For now, let's assume we can get it.
-    
     final auth = context.read<AuthProvider>();
     if (auth.userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Greška: Korisnik nije prepoznat.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Greška: Korisnik nije prepoznat. Pokušajte se ponovo prijaviti.')));
       return;
     }
 
@@ -259,13 +252,17 @@ class _BookingScreenState extends State<BookingScreen> {
       status: 'Pending',
     );
 
-    final error = await context.read<BookingProvider>().createAppointment(appointment);
-
-    if (error == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Rezervacija uspješna!')));
-      Navigator.pop(context); // Return to home
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Greška: $error')));
-    }
+    // Navigate to Review Screen
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ReservationReviewScreen(
+          appointment: appointment,
+          serviceName: _selectedService!.name,
+          price: _selectedService!.price.toDouble(),
+          salonName: _selectedSalon!.name,
+          barberName: "${_selectedBarber!.firstName} ${_selectedBarber!.lastName}",
+        ),
+      ),
+    );
   }
 }

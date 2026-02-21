@@ -42,6 +42,8 @@ public class Appointment
     [Required]
     [MaxLength(20)]
     public string PaymentStatus { get; set; } = "Pending"; // Pending, Paid, Failed
+
+    public string? StripeSessionId { get; set; }
     
     public string? Notes { get; set; }
     

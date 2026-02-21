@@ -45,3 +45,5 @@ msbuild.wrn
 .env
 appsettings.Development.json
 appsettings.json 
+
+./agent

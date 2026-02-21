@@ -85,12 +85,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _handleLogin() async {
     if (_formKey.currentState?.validate() ?? false) {
-      final success = await context.read<AuthProvider>().login(
+      final error = await context.read<AuthProvider>().login(
         _usernameController.text,
         _passwordController.text,
       );
 
-      if (success) {
+      if (!mounted) return;
+
+      if (error == null) {
         final auth = context.read<AuthProvider>();
         if (auth.isAdmin || auth.isBarber) {
              Navigator.pushReplacementNamed(context, '/home');
@@ -99,7 +101,10 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Greška pri prijavi')),
+          SnackBar(
+            content: Text(error),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }

@@ -21,12 +21,12 @@ class Service {
 
   factory Service.fromJson(Map<String, dynamic> json) {
     return Service(
-      id: json['id'],
-      salonId: json['salonId'],
-      name: json['name'],
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      salonId: (json['salonId'] as num?)?.toInt() ?? 0,
+      name: json['name'] ?? '',
       description: json['description'],
-      durationMinutes: json['durationMinutes'],
-      price: (json['price'] as num).toDouble(),
+      durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
       isPopular: json['isPopular'] ?? false,
       isActive: json['isActive'] ?? true,
     );

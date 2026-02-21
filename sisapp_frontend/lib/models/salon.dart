@@ -28,15 +28,15 @@ class Salon {
 
   factory Salon.fromJson(Map<String, dynamic> json) {
     return Salon(
-      id: json['id'],
-      name: json['name'],
-      city: json['city'],
-      address: json['address'],
-      phone: json['phone'],
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name'] ?? '',
+      city: json['city'] ?? '',
+      address: json['address'] ?? '',
+      phone: json['phone'] ?? '',
       postalCode: json['postalCode'] ?? '',
       country: json['country'] ?? '',
       website: json['website'],
-      employeeCount: json['employeeCount'] ?? 0,
+      employeeCount: (json['employeeCount'] as num?)?.toInt() ?? 0,
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
       isActive: json['isActive'] ?? true,
     );

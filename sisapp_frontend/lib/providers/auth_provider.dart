@@ -9,6 +9,8 @@ class AuthProvider extends ChangeNotifier {
   TokenResponse? _tokenResponse;
   bool _isLoading = false;
   String? _role;
+  String? _username;
+  String? _email;
   final ApiService _apiService = ApiService();
 
   int? _userId;
@@ -17,13 +19,15 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isLoggedIn => _tokenResponse != null;
   String? get role => _role;
+  String? get username => _username;
   int? get userId => _userId;
+  String? get email => _email;
 
   bool get isAdmin => _role == 'Admin' || _role == 'SuperAdmin';
   bool get isBarber => _role == 'Barber';
   bool get isCustomer => _role == 'User';
 
-  Future<bool> login(String username, String password) async {
+  Future<String?> login(String username, String password) async {
     _isLoading = true;
     notifyListeners();
 
@@ -38,30 +42,48 @@ class AuthProvider extends ChangeNotifier {
         await _saveToken(response);
         _isLoading = false;
         notifyListeners();
-        return true;
+        return null; // Success
+      } else {
+        _isLoading = false;
+        notifyListeners();
+        return 'Neispravno korisničko ime ili lozinka';
       }
     } catch (e) {
       print('Login error: $e');
+      _isLoading = false;
+      notifyListeners();
+      return 'Došlo je do greške prilikom prijave: ${e.toString()}';
     }
-
-    _isLoading = false;
-    notifyListeners();
-    return false;
   }
 
   void _decodeToken(String token) {
     try {
       Map<String, dynamic> decodedToken = JwtDecoder.decode(token);
-      // .NET often uses this long key for Role
-      _role = decodedToken['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ?? decodedToken['role'];
+      
+      // Extract Role (handle both String and List<dynamic>)
+      var roleClaim = decodedToken['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ?? decodedToken['role'];
+      if (roleClaim is List) {
+        _role = roleClaim.isNotEmpty ? roleClaim.first.toString() : null;
+      } else {
+        _role = roleClaim?.toString();
+      }
       
       // Extract User ID (nameid)
       final userIdStr = decodedToken['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ?? decodedToken['nameid'];
       if (userIdStr != null) {
         _userId = int.tryParse(userIdStr.toString());
       }
+
+      // Extract Username (unique_name or sub)
+      _username = decodedToken['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'] ?? 
+                  decodedToken['unique_name'] ?? 
+                  decodedToken['sub'];
+
+      // Extract Email
+      _email = decodedToken['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] ?? 
+               decodedToken['email'];
       
-      print('User Role: $_role, ID: $_userId');
+      print('User Role: $_role, ID: $_userId, Username: $_username, Email: $_email');
     } catch (e) {
       print('Error decoding token: $e');
     }
@@ -69,6 +91,10 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> logout() async {
     _tokenResponse = null;
+    _role = null;
+    _userId = null;
+    _username = null;
+    _email = null;
     await _clearToken();
     notifyListeners();
   }

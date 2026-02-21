@@ -10,6 +10,9 @@ using ŠišAppApi.Data;
 using ŠišAppApi.Services;
 using Stripe;
 using MassTransit;
+using Mapster;
+using MapsterMapper;
+using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -51,10 +54,14 @@ StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"];
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ISmsService, SmsService>();
+builder.Services.AddScoped<IAppointmentService, AppointmentService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // Konfiguracija MassTransit-a (RabbitMQ)
 builder.Services.AddMassTransit(x =>
 {
+    x.AddConsumer<ŠišAppApi.Services.Consumers.EmailConsumer>();
+
     x.UsingRabbitMq((context, cfg) =>
     {
         var rabbitHost = builder.Configuration["RabbitMQ:Host"] ?? "localhost";
@@ -62,8 +69,18 @@ builder.Services.AddMassTransit(x =>
             h.Username("guest");
             h.Password("guest");
         });
+        cfg.ConfigureEndpoints(context);
     });
 });
+
+
+var config = TypeAdapterConfig.GlobalSettings;
+config.Default.PreserveReference(true);
+config.Scan(Assembly.GetExecutingAssembly());
+builder.Services.AddSingleton(config);
+builder.Services.AddScoped<IMapper, Mapper>();
+
+
 
 // Konfiguracija Swagger-a
 builder.Services.AddSwaggerGen(c =>

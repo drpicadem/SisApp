@@ -23,15 +23,15 @@ class Barber {
 
   factory Barber.fromJson(Map<String, dynamic> json) {
     return Barber(
-      id: json['id'],
-      userId: json['userId'],
-      salonId: json['salonId'],
-      firstName: json['firstName'],
-      lastName: json['lastName'],
-      email: json['email'],
-      username: json['username'],
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      userId: (json['userId'] as num?)?.toInt() ?? 0,
+      salonId: (json['salonId'] as num?)?.toInt() ?? 0,
+      firstName: json['firstName'] ?? json['user']?['firstName'] ?? '',
+      lastName: json['lastName'] ?? json['user']?['lastName'] ?? '',
+      email: json['email'] ?? json['user']?['email'] ?? '',
+      username: json['username'] ?? json['user']?['username'] ?? '',
       bio: json['bio'] ?? '',
-      rating: (json['rating'] as num).toDouble(),
+      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }

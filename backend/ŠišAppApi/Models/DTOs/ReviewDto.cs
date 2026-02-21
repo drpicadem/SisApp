@@ -1,25 +1,22 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace ŠišAppApi.Models.DTOs;
 
 public class ReviewDto
 {
     public int Id { get; set; }
-
-    [Required(ErrorMessage = "Ime korisnika je obavezno")]
-    [StringLength(100, ErrorMessage = "Ime korisnika ne smije biti duže od 100 znakova")]
+    public int UserId { get; set; }
     public string UserName { get; set; } = string.Empty;
-
-    [Required(ErrorMessage = "Ocjena je obavezna")]
-    [Range(1, 5, ErrorMessage = "Ocjena mora biti između 1 i 5")]
+    public int BarberId { get; set; }
+    public string BarberName { get; set; } = string.Empty;
+    public int? SalonId { get; set; }
+    public string? SalonName { get; set; }
+    public int AppointmentId { get; set; }
+    public string? ServiceName { get; set; }
     public int Rating { get; set; }
-
-    [Required(ErrorMessage = "Komentar je obavezan")]
-    [StringLength(500, MinimumLength = 10, ErrorMessage = "Komentar mora imati između 10 i 500 znakova")]
     public string Comment { get; set; } = string.Empty;
-
-    [Required(ErrorMessage = "Datum kreiranja je obavezan")]
     public DateTime CreatedAt { get; set; }
-
+    public DateTime? UpdatedAt { get; set; }
     public int HelpfulCount { get; set; }
-} 
+    public bool IsVerified { get; set; }
+    public string? BarberResponse { get; set; }
+    public DateTime? BarberRespondedAt { get; set; }
+}
