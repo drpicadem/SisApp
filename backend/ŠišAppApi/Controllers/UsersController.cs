@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ŠišAppApi.Data;
 using ŠišAppApi.Models;
+using ŠišAppApi.Services.Interfaces;
 
 namespace ŠišAppApi.Controllers;
 
@@ -10,10 +11,12 @@ namespace ŠišAppApi.Controllers;
 public class UsersController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly IImageService _imageService;
 
-    public UsersController(ApplicationDbContext context)
+    public UsersController(ApplicationDbContext context, IImageService imageService)
     {
         _context = context;
+        _imageService = imageService;
     }
 
     // GET: api/Users
@@ -98,6 +101,27 @@ public class UsersController : ControllerBase
         await _context.SaveChangesAsync();
 
         return NoContent();
+    }
+
+    // POST: api/Users/5/upload-profile-image
+    [HttpPost("{id}/upload-profile-image")]
+    [RequestSizeLimit(10 * 1024 * 1024)]
+    public async Task<ActionResult<Image>> UploadProfileImage(int id, IFormFile file)
+    {
+        var user = await _context.Users.FindAsync(id);
+        if (user == null) return NotFound();
+
+        // Delete old profile image if exists
+        if (!string.IsNullOrEmpty(user.ImageId))
+        {
+            await _imageService.DeleteAsync(user.ImageId);
+        }
+
+        var image = await _imageService.UploadImageAsync(file, "profile", id, "User");
+        user.ImageId = image.Id;
+        await _context.SaveChangesAsync();
+
+        return Ok(image);
     }
 
     private bool UserExists(int id)

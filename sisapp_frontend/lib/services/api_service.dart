@@ -34,6 +34,53 @@ class ApiService {
     }
   }
 
+  Future<TokenResponse?> register(Map<String, dynamic> data) async {
+    try {
+      // Log each field being sent
+      print('=== REGISTER REQUEST ===');
+      data.forEach((key, value) {
+        if (key.toLowerCase().contains('password')) {
+          print('  $key: ****** (length: ${value.toString().length})');
+        } else {
+          print('  $key: $value');
+        }
+      });
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/Authentication/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(data),
+      );
+
+      print('=== REGISTER RESPONSE ===');
+      print('  Status: ${response.statusCode}');
+      print('  Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        return TokenResponse.fromJson(jsonDecode(response.body));
+      }
+      
+      // Parse ASP.NET validation errors
+      final errorBody = jsonDecode(response.body);
+      if (errorBody['errors'] != null) {
+        final errors = errorBody['errors'] as Map<String, dynamic>;
+        final messages = <String>[];
+        errors.forEach((field, fieldErrors) {
+          print('  Validation error for $field: $fieldErrors');
+          if (fieldErrors is List) {
+            messages.addAll(fieldErrors.map((e) => e.toString()));
+          }
+        });
+        throw Exception(messages.join('\n'));
+      }
+      
+      throw Exception(errorBody['userError'] ?? errorBody['title'] ?? 'Greška pri registraciji');
+    } catch (e) {
+      print('Register error: $e');
+      rethrow;
+    }
+  }
+
   // Service methods
   Future<List<Service>> getServices(int salonId, String token) async {
     try {
@@ -99,7 +146,7 @@ class ApiService {
     }
   }
 
-  Future<bool> createBarber(CreateBarberDto dto, String token) async {
+  Future<int?> createBarber(CreateBarberDto dto, String token) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/Barbers'),
@@ -110,14 +157,15 @@ class ApiService {
         body: jsonEncode(dto.toJson()),
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
-        return true;
+        final data = jsonDecode(response.body);
+        return data['id'] as int?;
       } else {
         print('Create Barber failed: ${response.statusCode} ${response.body}');
-        return false;
+        return null;
       }
     } catch (e) {
       print('Create Barber error: $e');
-      return false;
+      return null;
     }
   }
   // Salon methods
@@ -142,7 +190,7 @@ class ApiService {
     }
   }
 
-  Future<bool> createSalon(Salon salon, String token) async {
+  Future<int?> createSalon(Salon salon, String token) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/Salons'),
@@ -152,10 +200,14 @@ class ApiService {
         },
         body: jsonEncode(salon.toJson()),
       );
-      return response.statusCode == 200 || response.statusCode == 201;
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        return data['id'] as int?;
+      }
+      return null;
     } catch (e) {
       print('Create Salon error: $e');
-      return false;
+      return null;
     }
   }
 
@@ -671,6 +723,92 @@ class ApiService {
     } catch (e) {
       print('Respond to review error: $e');
       rethrow;
+    }
+  }
+  // ============ Barber Specialties (Service Assignment) ============
+
+  Future<List<Map<String, dynamic>>> getBarberServices(int barberId, String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/Barbers/$barberId/services'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode == 200) {
+        return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+      }
+      return [];
+    } catch (e) {
+      print('Get barber services error: $e');
+      return [];
+    }
+  }
+
+  Future<bool> assignBarberServices(int barberId, List<int> serviceIds, String token) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/Barbers/$barberId/services'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(serviceIds),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Assign barber services error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> removeBarberService(int barberId, int serviceId, String token) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/Barbers/$barberId/services/$serviceId'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+      return response.statusCode == 204;
+    } catch (e) {
+      print('Remove barber service error: $e');
+      return false;
+    }
+  }
+
+  // ============ Service Management ============
+
+  Future<bool> deleteService(int serviceId, String token) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/Services/$serviceId'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+      return response.statusCode == 204 || response.statusCode == 200;
+    } catch (e) {
+      print('Delete Service error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateService(Service service, String token) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/Services/${service.id}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(service.toJson()),
+      );
+      return response.statusCode == 204 || response.statusCode == 200;
+    } catch (e) {
+      print('Update Service error: $e');
+      return false;
     }
   }
 }

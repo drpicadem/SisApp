@@ -49,4 +49,22 @@ class ServiceProvider extends ChangeNotifier {
     notifyListeners();
     return success;
   }
+
+  Future<bool> deleteService(int serviceId, int salonId) async {
+    if (_authProvider?.tokenResponse == null) return false;
+    bool success = await _apiService.deleteService(serviceId, _authProvider!.tokenResponse!.token);
+    if (success) {
+      await loadServices(salonId);
+    }
+    return success;
+  }
+
+  Future<bool> updateService(Service service) async {
+    if (_authProvider?.tokenResponse == null) return false;
+    bool success = await _apiService.updateService(service, _authProvider!.tokenResponse!.token);
+    if (success) {
+      await loadServices(service.salonId);
+    }
+    return success;
+  }
 }

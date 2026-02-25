@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ŠišAppApi.Models.Authentication;
+using ŠišAppApi.Models.DTOs.Auth;
 using ŠišAppApi.Services;
 
 namespace ŠišAppApi.Controllers
@@ -25,6 +26,13 @@ namespace ŠišAppApi.Controllers
                 return Unauthorized();
             }
 
+            return Ok(response);
+        }
+
+        [HttpPost("register")]
+        public async Task<ActionResult<TokenResponse>> Register(RegisterDto request)
+        {
+            var response = await _authService.Register(request);
             return Ok(response);
         }
 

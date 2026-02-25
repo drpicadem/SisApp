@@ -56,6 +56,48 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<String?> register({
+    required String username,
+    required String firstName,
+    required String lastName,
+    required String email,
+    required String phoneNumber,
+    required String password,
+    required String confirmPassword,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final response = await _apiService.register({
+        'username': username,
+        'firstName': firstName,
+        'lastName': lastName,
+        'email': email,
+        'phoneNumber': phoneNumber,
+        'password': password,
+        'confirmPassword': confirmPassword,
+      });
+
+      if (response != null) {
+        _tokenResponse = response;
+        _decodeToken(response.token);
+        await _saveToken(response);
+        _isLoading = false;
+        notifyListeners();
+        return null; // Success
+      } else {
+        _isLoading = false;
+        notifyListeners();
+        return 'Registracija nije uspjela';
+      }
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      return e.toString().replaceAll('Exception: ', '');
+    }
+  }
+
   void _decodeToken(String token) {
     try {
       Map<String, dynamic> decodedToken = JwtDecoder.decode(token);

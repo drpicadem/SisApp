@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 import '../models/salon.dart';
 import '../models/service.dart';
 import '../models/barber.dart';
+import '../providers/auth_provider.dart';
 import '../providers/service_provider.dart';
 import '../providers/barber_provider.dart';
+import '../widgets/entity_image.dart';
 
 class SalonDetailsScreen extends StatefulWidget {
   @override
@@ -30,56 +32,122 @@ class _SalonDetailsScreenState extends State<SalonDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final salon = ModalRoute.of(context)!.settings.arguments as Salon;
+    final token = context.read<AuthProvider>().tokenResponse?.token ?? '';
 
     return Scaffold(
-      appBar: AppBar(title: Text(salon.name)),
+      appBar: AppBar(
+        title: Text('Pregled Salona'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.favorite_border),
+            onPressed: () {},
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Image Placeholder
-            Container(
-              height: 200,
-              width: double.infinity,
-              color: Colors.grey[300],
-              child: Icon(Icons.store, size: 80, color: Colors.grey[500]),
+            // Hero salon image
+            Stack(
+              children: [
+                EntityImage(
+                  entityType: 'Salon',
+                  entityId: salon.id,
+                  token: token,
+                  height: 220,
+                  width: double.infinity,
+                  placeholderIcon: Icons.store,
+                  placeholderIconSize: 80,
+                ),
+                // Salon logo/name overlay
+                Positioned(
+                  bottom: -30,
+                  left: 16,
+                  child: Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 6,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Icon(Icons.content_cut, size: 32, color: Color(0xFF7B5EA7)),
+                    ),
+                  ),
+                ),
+              ],
             ),
+            SizedBox(height: 40),
             Padding(
-              padding: EdgeInsets.all(16.0),
+              padding: EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(salon.name, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 8),
-                  Text('${salon.address}, ${salon.city}', style: TextStyle(fontSize: 16, color: Colors.grey[600])),
-                  SizedBox(height: 16),
-                  Text('Usluge', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text(
+                    salon.name.toUpperCase(),
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                  ),
+                  SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on, size: 16, color: Colors.grey),
+                      SizedBox(width: 4),
+                      Text('${salon.address}, ${salon.city}', style: TextStyle(color: Colors.grey[600])),
+                    ],
+                  ),
+                  if (salon.phone.isNotEmpty) ...[
+                    SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.phone, size: 16, color: Colors.grey),
+                        SizedBox(width: 4),
+                        Text(salon.phone, style: TextStyle(color: Colors.grey[600])),
+                      ],
+                    ),
+                  ],
+                  SizedBox(height: 20),
+
+                  // Barbers section - "Uposlenici"
+                  Text('Uposlenici', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 12),
+                  _buildBarberList(token),
+
+                  SizedBox(height: 20),
+
+                  // Services section
+                  Text('Cjenovnik usluga', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   SizedBox(height: 8),
                   _buildServiceList(),
-                  SizedBox(height: 16),
-                  Text('Naš Tim', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 8),
-                  _buildBarberList(),
                 ],
               ),
             ),
           ],
         ),
       ),
-       bottomNavigationBar: Padding(
+      bottomNavigationBar: Padding(
         padding: EdgeInsets.all(16.0),
         child: ElevatedButton(
-          child: Text('REZERVIŠI TERMIN'),
+          child: Text('ZAKAŽI TERMIN', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           style: ElevatedButton.styleFrom(
+            backgroundColor: Color(0xFF7B5EA7),
+            foregroundColor: Colors.white,
             padding: EdgeInsets.symmetric(vertical: 16),
-            textStyle: TextStyle(fontSize: 18),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           onPressed: () {
-             Navigator.pushNamed(
-               context, 
-               '/booking', 
-               arguments: {'salon': salon} // Pass salon to pre-select
-             );
+            Navigator.pushNamed(
+              context,
+              '/booking',
+              arguments: {'salon': salon},
+            );
           },
         ),
       ),
@@ -89,52 +157,76 @@ class _SalonDetailsScreenState extends State<SalonDetailsScreen> {
   Widget _buildServiceList() {
     return Consumer<ServiceProvider>(
       builder: (context, provider, _) {
-        if (provider.isLoading) return CircularProgressIndicator();
+        if (provider.isLoading) return Center(child: CircularProgressIndicator());
         if (provider.services.isEmpty) return Text('Nema dostupnih usluga.');
-        
+
         return Column(
-          children: provider.services.map((service) => ListTile(
-            title: Text(service.name),
-            trailing: Text('${service.price} KM', style: TextStyle(fontWeight: FontWeight.bold)),
-            dense: true,
+          children: provider.services.map((service) => Container(
+            padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    '${service.name}(${service.durationMinutes} min)',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ),
+                Text(
+                  '${service.price.toStringAsFixed(0)} KM',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+              ],
+            ),
           )).toList(),
         );
       },
     );
   }
 
-  Widget _buildBarberList() {
+  Widget _buildBarberList(String token) {
     return Consumer<BarberProvider>(
       builder: (context, provider, _) {
-         if (provider.isLoading) return CircularProgressIndicator();
-         if (provider.barbers.isEmpty) return Text('Nema dostupnih frizera.');
+        if (provider.isLoading) return Center(child: CircularProgressIndicator());
+        if (provider.barbers.isEmpty) return Text('Nema dostupnih frizera.');
 
-         return SizedBox(
-           height: 120,
-           child: ListView.builder(
-             scrollDirection: Axis.horizontal,
-             itemCount: provider.barbers.length,
-             itemBuilder: (context, index) {
-               final barber = provider.barbers[index];
-               return Container(
-                 width: 100,
-                 margin: EdgeInsets.only(right: 16),
-                 child: Column(
-                   children: [
-                     CircleAvatar(
-                       radius: 30,
-                       backgroundColor: Colors.blue[100],
-                       child: Text(barber.firstName[0], style: TextStyle(fontSize: 24)),
-                     ),
-                     SizedBox(height: 8),
-                     Text(barber.firstName, overflow: TextOverflow.ellipsis),
-                     Text('4.8 ⭐', style: TextStyle(fontSize: 12, color: Colors.amber)),
-                   ],
-                 ),
-               );
-             },
-           ),
-         );
+        return SizedBox(
+          height: 110,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: provider.barbers.length,
+            itemBuilder: (context, index) {
+              final barber = provider.barbers[index];
+              return Container(
+                width: 90,
+                margin: EdgeInsets.only(right: 16),
+                child: Column(
+                  children: [
+                    // Barber photo
+                    EntityImage(
+                      entityType: 'Barber',
+                      entityId: barber.id,
+                      token: token,
+                      isCircular: true,
+                      circularRadius: 32,
+                      placeholderIcon: Icons.person,
+                      placeholderIconSize: 28,
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      barber.firstName,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
       },
     );
   }

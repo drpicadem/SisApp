@@ -14,7 +14,7 @@ class UserProvider extends ChangeNotifier {
   List<User> get users => _users;
   bool get isLoading => _isLoading;
 
-  Future<void> loadUsers({String role = 'Customer'}) async {
+  Future<void> loadUsers({String? role}) async {
     if (_authProvider?.tokenResponse == null) return;
     
     _isLoading = true;

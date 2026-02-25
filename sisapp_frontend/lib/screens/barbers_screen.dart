@@ -1,9 +1,17 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import '../providers/barber_provider.dart';
 import '../providers/salon_provider.dart';
+import '../providers/auth_provider.dart';
+import '../providers/service_provider.dart';
 import '../models/barber.dart';
 import '../models/salon.dart';
+import '../models/service.dart';
+import '../services/api_service.dart';
+import '../services/image_service.dart';
+import '../widgets/entity_image.dart';
 
 class BarbersScreen extends StatefulWidget {
   @override
@@ -41,6 +49,7 @@ class _BarbersScreenState extends State<BarbersScreen> {
                    decoration: InputDecoration(
                      labelText: 'Odaberite salon za pregled',
                      border: OutlineInputBorder(),
+                     prefixIcon: Icon(Icons.store),
                    ),
                    items: salonProvider.salons.map((salon) {
                      return DropdownMenuItem(
@@ -54,6 +63,7 @@ class _BarbersScreenState extends State<BarbersScreen> {
                      });
                      if (newValue != null) {
                        context.read<BarberProvider>().loadBarbers(newValue.id);
+                       context.read<ServiceProvider>().loadServices(newValue.id);
                      }
                    },
                  );
@@ -66,7 +76,17 @@ class _BarbersScreenState extends State<BarbersScreen> {
             child: Consumer<BarberProvider>(
               builder: (context, provider, child) {
                 if (_selectedSalon == null) {
-                  return Center(child: Text('Molimo odaberite salon iznad.'));
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.person_search, size: 64, color: Colors.grey[300]),
+                        SizedBox(height: 16),
+                        Text('Molimo odaberite salon iznad.',
+                            style: TextStyle(color: Colors.grey[500], fontSize: 16)),
+                      ],
+                    ),
+                  );
                 }
 
                 if (provider.isLoading) {
@@ -74,27 +94,25 @@ class _BarbersScreenState extends State<BarbersScreen> {
                 }
 
                 if (provider.barbers.isEmpty) {
-                  return Center(child: Text('Nema dodanih frizera u ovom salonu.'));
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.person_off, size: 64, color: Colors.grey[300]),
+                        SizedBox(height: 16),
+                        Text('Nema dodanih frizera u ovom salonu.',
+                            style: TextStyle(color: Colors.grey[500], fontSize: 16)),
+                      ],
+                    ),
+                  );
                 }
 
                 return ListView.builder(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
                   itemCount: provider.barbers.length,
                   itemBuilder: (context, index) {
                     final barber = provider.barbers[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        child: Text(barber.firstName.isNotEmpty ? barber.firstName[0] : '?'),
-                      ),
-                      title: Text('${barber.firstName} ${barber.lastName}'),
-                      subtitle: Text(barber.bio),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.star, color: Colors.amber, size: 18),
-                          Text(barber.rating.toString()),
-                        ],
-                      ),
-                    );
+                    return _buildBarberCard(barber);
                   },
                 );
               },
@@ -102,10 +120,160 @@ class _BarbersScreenState extends State<BarbersScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        child: Icon(Icons.person_add),
+      floatingActionButton: FloatingActionButton.extended(
+        icon: Icon(Icons.person_add),
+        label: Text('Novi uposlenik'),
+        backgroundColor: Color(0xFFE0CFA9),
         onPressed: () => _showAddBarberDialog(context),
       ),
+    );
+  }
+
+  Widget _buildBarberCard(Barber barber) {
+    return Card(
+      margin: EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            EntityImage(
+              entityType: 'Barber',
+              entityId: barber.id,
+              token: context.read<AuthProvider>().tokenResponse?.token ?? '',
+              isCircular: true,
+              circularRadius: 28,
+              placeholderIcon: Icons.person,
+              placeholderIconSize: 24,
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${barber.firstName} ${barber.lastName}',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 4),
+                  Text(barber.email, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                  if (barber.bio.isNotEmpty) ...[
+                    SizedBox(height: 4),
+                    Text(barber.bio,
+                        style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.star, color: Colors.amber, size: 16),
+                      SizedBox(width: 4),
+                      Text(barber.rating.toStringAsFixed(1),
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Service assignment button
+            Column(
+              children: [
+                IconButton(
+                  icon: Icon(Icons.content_cut, color: Color(0xFFE0CFA9)),
+                  tooltip: 'Dodijeli usluge',
+                  onPressed: () => _showServiceAssignmentDialog(context, barber),
+                ),
+                Text('Usluge', style: TextStyle(fontSize: 10, color: Colors.grey)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showServiceAssignmentDialog(BuildContext context, Barber barber) async {
+    final token = context.read<AuthProvider>().tokenResponse?.token;
+    if (token == null) return;
+
+    final apiService = ApiService();
+
+    // Load barber's current services and salon services
+    final barberServices = await apiService.getBarberServices(barber.id, token);
+    final assignedServiceIds = barberServices.map((s) => s['serviceId'] as int).toSet();
+
+    final salonServices = context.read<ServiceProvider>().services;
+    if (salonServices.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Nema usluga u ovom salonu. Prvo dodajte usluge.')),
+        );
+      }
+      return;
+    }
+
+    // Create a mutable copy of assigned ids for the dialog
+    final selectedIds = Set<int>.from(assignedServiceIds);
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('Usluge za ${barber.firstName} ${barber.lastName}'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: salonServices.length,
+                  itemBuilder: (context, index) {
+                    final service = salonServices[index];
+                    final isSelected = selectedIds.contains(service.id);
+                    return CheckboxListTile(
+                      title: Text(service.name),
+                      subtitle: Text('${service.durationMinutes} min - ${service.price.toStringAsFixed(2)} KM'),
+                      value: isSelected,
+                      activeColor: Color(0xFFE0CFA9),
+                      onChanged: (bool? value) {
+                        setDialogState(() {
+                          if (value == true) {
+                            selectedIds.add(service.id);
+                          } else {
+                            selectedIds.remove(service.id);
+                          }
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: Text('Odustani'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(dialogContext);
+                    final success = await apiService.assignBarberServices(
+                      barber.id, selectedIds.toList(), token,
+                    );
+                    if (mounted) {
+                      ScaffoldMessenger.of(this.context).showSnackBar(
+                        SnackBar(content: Text(success ? 'Usluge ažurirane!' : 'Greška pri ažuriranju.')),
+                      );
+                    }
+                  },
+                  child: Text('Spremi'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -117,6 +285,8 @@ class _BarbersScreenState extends State<BarbersScreen> {
     final _passwordController = TextEditingController();
     final _bioController = TextEditingController();
     final _formKey = GlobalKey<FormState>();
+    File? _selectedImage;
+    final _picker = ImagePicker();
     
     // Default to currently selected salon if available
     Salon? _dialogSelectedSalon = _selectedSalon;
@@ -125,7 +295,7 @@ class _BarbersScreenState extends State<BarbersScreen> {
       context: context,
       builder: (context) {
         return StatefulBuilder(
-          builder: (context, setState) {
+          builder: (context, setDialogState) {
             return AlertDialog(
               title: Text('Novi Uposlenik'),
               content: SingleChildScrollView(
@@ -134,6 +304,40 @@ class _BarbersScreenState extends State<BarbersScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Image picker
+                      GestureDetector(
+                        onTap: () async {
+                          final XFile? pickedFile = await _picker.pickImage(
+                            source: ImageSource.gallery,
+                            maxWidth: 1024,
+                            maxHeight: 1024,
+                            imageQuality: 85,
+                          );
+                          if (pickedFile != null) {
+                            setDialogState(() {
+                              _selectedImage = File(pickedFile.path);
+                            });
+                          }
+                        },
+                        child: CircleAvatar(
+                          radius: 50,
+                          backgroundColor: Colors.grey[300],
+                          backgroundImage: _selectedImage != null
+                              ? FileImage(_selectedImage!)
+                              : null,
+                          child: _selectedImage == null
+                              ? Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.add_a_photo, size: 28, color: Colors.grey[600]),
+                                    SizedBox(height: 4),
+                                    Text('Slika', style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+                                  ],
+                                )
+                              : null,
+                        ),
+                      ),
+                      SizedBox(height: 16),
                        Consumer<SalonProvider>(
                         builder: (context, salonProvider, _) {
                           return DropdownButtonFormField<Salon>(
@@ -146,7 +350,7 @@ class _BarbersScreenState extends State<BarbersScreen> {
                               );
                             }).toList(),
                             onChanged: (val) {
-                              setState(() {
+                              setDialogState(() {
                                 _dialogSelectedSalon = val;
                               });
                             },
@@ -206,17 +410,30 @@ class _BarbersScreenState extends State<BarbersScreen> {
                         bio: _bioController.text,
                       );
 
-                      final success = await context.read<BarberProvider>().addBarber(dto);
+                      final createdId = await context.read<BarberProvider>().addBarber(dto);
                       
                       if (!context.mounted) return;
 
-                      if (success) {
+                      if (createdId != null) {
+                        // Upload image if selected
+                        if (_selectedImage != null) {
+                          final token = context.read<AuthProvider>().tokenResponse?.token;
+                          if (token != null) {
+                            await ImageService.uploadImage(
+                              _selectedImage!,
+                              token,
+                              imageType: 'barber',
+                              entityId: createdId,
+                              entityType: 'Barber',
+                            );
+                          }
+                        }
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Uposlenik dodan!')));
                          Navigator.pop(context);
                          
                          // Refresh list if added to current view
                          if (_selectedSalon?.id == _dialogSelectedSalon?.id) {
-                           context.read<BarberProvider>().loadBarbers(_selectedSalon!.id);
+                           this.context.read<BarberProvider>().loadBarbers(_selectedSalon!.id);
                          }
                       } else {
                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Greška!')));

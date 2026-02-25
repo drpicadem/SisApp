@@ -8,6 +8,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using ŠišAppApi.Data;
 using ŠišAppApi.Services;
+using ŠišAppApi.Services.Interfaces;
+using ŠišAppApi.Services.Services;
 using Stripe;
 using MassTransit;
 using Mapster;
@@ -56,6 +58,7 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ISmsService, SmsService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IImageService, ImageService>();
 
 // Konfiguracija MassTransit-a (RabbitMQ)
 builder.Services.AddMassTransit(x =>
@@ -152,6 +155,7 @@ app.UseSwaggerUI(c =>
 
 app.UseHttpsRedirection();
 app.UseCors();
+app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();

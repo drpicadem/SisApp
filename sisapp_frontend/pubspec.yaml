@@ -39,6 +39,9 @@ dependencies:
   fl_chart: ^0.66.2
   jwt_decoder: ^2.0.1
   url_launcher: ^6.2.5
+  image_picker: ^1.0.7
+  http_parser: ^4.0.2
+  file_selector_windows: ^0.9.3+4
 
 dev_dependencies:
   flutter_test:

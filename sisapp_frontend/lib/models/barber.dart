@@ -8,6 +8,7 @@ class Barber {
   final String username;
   final String bio;
   final double rating;
+  final String? imageIds;
 
   Barber({
     required this.id,
@@ -19,6 +20,7 @@ class Barber {
     required this.username,
     required this.bio,
     required this.rating,
+    this.imageIds,
   });
 
   factory Barber.fromJson(Map<String, dynamic> json) {
@@ -32,6 +34,7 @@ class Barber {
       username: json['username'] ?? json['user']?['username'] ?? '',
       bio: json['bio'] ?? '',
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
+      imageIds: json['imageIds'],
     );
   }
 }

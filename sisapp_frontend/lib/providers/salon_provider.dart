@@ -30,21 +30,21 @@ class SalonProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> addSalon(Salon salon) async {
-    if (_authProvider?.tokenResponse == null) return false;
+  Future<int?> addSalon(Salon salon) async {
+    if (_authProvider?.tokenResponse == null) return null;
 
     _isLoading = true;
     notifyListeners();
 
-    bool success = await _apiService.createSalon(salon, _authProvider!.tokenResponse!.token);
+    int? createdId = await _apiService.createSalon(salon, _authProvider!.tokenResponse!.token);
     
-    if (success) {
+    if (createdId != null) {
       await loadSalons();
     }
 
     _isLoading = false;
     notifyListeners();
-    return success;
+    return createdId;
   }
 
   Future<bool> toggleStatus(Salon salon) async {

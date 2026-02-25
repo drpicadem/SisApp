@@ -4,6 +4,10 @@ namespace ŠišAppApi.Models.DTOs.Auth;
 
 public class RegisterDto
 {
+    [Required(ErrorMessage = "Korisničko ime je obavezno")]
+    [StringLength(50, MinimumLength = 3, ErrorMessage = "Korisničko ime mora imati između 3 i 50 znakova")]
+    public string Username { get; set; } = string.Empty;
+
     [Required(ErrorMessage = "Ime je obavezno")]
     [StringLength(50, MinimumLength = 2, ErrorMessage = "Ime mora imati između 2 i 50 znakova")]
     public string FirstName { get; set; } = string.Empty;

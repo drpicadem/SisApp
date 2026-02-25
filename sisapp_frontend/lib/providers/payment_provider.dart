@@ -50,8 +50,11 @@ class PaymentProvider extends ChangeNotifier {
   Future<bool> monitorPaymentStatus(int appointmentId) async {
     if (_authProvider?.tokenResponse == null) return false;
     
-    // Poll every 2 seconds for up to 60 seconds (30 attempts)
-    for (int i = 0; i < 30; i++) {
+    // Initial delay to give user time to complete checkout in browser
+    await Future.delayed(Duration(seconds: 5));
+    
+    // Poll every 2 seconds for up to 3 minutes (90 attempts)
+    for (int i = 0; i < 90; i++) {
         await Future.delayed(Duration(seconds: 2));
         
         try {

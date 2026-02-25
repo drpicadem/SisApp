@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using ŠišAppApi.Data;
 using ŠišAppApi.Models;
+using ŠišAppApi.Services.Interfaces;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -12,10 +14,12 @@ namespace ŠišAppApi.Controllers;
 public class BarbersController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly IImageService _imageService;
 
-    public BarbersController(ApplicationDbContext context)
+    public BarbersController(ApplicationDbContext context, IImageService imageService)
     {
         _context = context;
+        _imageService = imageService;
     }
 
     // GET: api/Barbers/salon/1
@@ -32,6 +36,7 @@ public class BarbersController : ControllerBase
                 b.SalonId,
                 b.Rating,
                 b.Bio,
+                b.ImageIds,
                 FirstName = b.User.FirstName,
                 LastName = b.User.LastName,
                 Email = b.User.Email,
@@ -83,6 +88,112 @@ public class BarbersController : ControllerBase
         await _context.SaveChangesAsync();
 
         return CreatedAtAction("GetBarbersBySalon", new { salonId = dto.SalonId }, barber);
+    }
+
+    // POST: api/Barbers/5/upload-image
+    [HttpPost("{id}/upload-image")]
+    [RequestSizeLimit(10 * 1024 * 1024)]
+    public async Task<ActionResult<Image>> UploadBarberImage(int id, IFormFile file)
+    {
+        var barber = await _context.Barbers.FindAsync(id);
+        if (barber == null) return NotFound();
+
+        var image = await _imageService.UploadImageAsync(file, "barber", id, "Barber");
+
+        var imageIds = string.IsNullOrEmpty(barber.ImageIds)
+            ? new List<string>()
+            : JsonSerializer.Deserialize<List<string>>(barber.ImageIds) ?? new List<string>();
+        imageIds.Add(image.Id);
+        barber.ImageIds = JsonSerializer.Serialize(imageIds);
+        await _context.SaveChangesAsync();
+
+        return Ok(image);
+    }
+
+    // GET: api/Barbers/{barberId}/services
+    [HttpGet("{barberId}/services")]
+    public async Task<ActionResult<IEnumerable<object>>> GetBarberServices(int barberId)
+    {
+        var barber = await _context.Barbers.FindAsync(barberId);
+        if (barber == null) return NotFound();
+
+        var services = await _context.BarberSpecialties
+            .Include(bs => bs.Service)
+            .Where(bs => bs.BarberId == barberId && !bs.IsDeleted)
+            .Select(bs => new {
+                bs.Id,
+                bs.ServiceId,
+                ServiceName = bs.Service.Name,
+                ServicePrice = bs.Service.Price,
+                ServiceDuration = bs.Service.DurationMinutes,
+                bs.ExpertiseLevel,
+                bs.IsPrimary,
+                bs.Notes
+            })
+            .ToListAsync();
+
+        return Ok(services);
+    }
+
+    // POST: api/Barbers/{barberId}/services
+    [HttpPost("{barberId}/services")]
+    public async Task<IActionResult> AssignBarberServices(int barberId, [FromBody] List<int> serviceIds)
+    {
+        var barber = await _context.Barbers.FindAsync(barberId);
+        if (barber == null) return NotFound();
+
+        // Get existing assignments
+        var existing = await _context.BarberSpecialties
+            .Where(bs => bs.BarberId == barberId && !bs.IsDeleted)
+            .Select(bs => bs.ServiceId)
+            .ToListAsync();
+
+        // Add new ones
+        var toAdd = serviceIds.Except(existing).ToList();
+        foreach (var serviceId in toAdd)
+        {
+            var service = await _context.Services.FindAsync(serviceId);
+            if (service == null) continue;
+
+            _context.BarberSpecialties.Add(new BarberSpecialty
+            {
+                BarberId = barberId,
+                ServiceId = serviceId,
+                ExpertiseLevel = 3,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        // Remove unchecked ones
+        var toRemove = existing.Except(serviceIds).ToList();
+        var specialtiesToRemove = await _context.BarberSpecialties
+            .Where(bs => bs.BarberId == barberId && toRemove.Contains(bs.ServiceId) && !bs.IsDeleted)
+            .ToListAsync();
+
+        foreach (var specialty in specialtiesToRemove)
+        {
+            specialty.IsDeleted = true;
+            specialty.DeletedAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync();
+        return Ok();
+    }
+
+    // DELETE: api/Barbers/{barberId}/services/{serviceId}
+    [HttpDelete("{barberId}/services/{serviceId}")]
+    public async Task<IActionResult> RemoveBarberService(int barberId, int serviceId)
+    {
+        var specialty = await _context.BarberSpecialties
+            .FirstOrDefaultAsync(bs => bs.BarberId == barberId && bs.ServiceId == serviceId && !bs.IsDeleted);
+
+        if (specialty == null) return NotFound();
+
+        specialty.IsDeleted = true;
+        specialty.DeletedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return NoContent();
     }
 
     public class CreateBarberDto

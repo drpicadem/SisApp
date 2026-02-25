@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using ŠišAppApi.Data;
 using ŠišAppApi.Models;
+using ŠišAppApi.Services.Interfaces;
 
 namespace ŠišAppApi.Controllers;
 
@@ -10,10 +12,12 @@ namespace ŠišAppApi.Controllers;
 public class SalonsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly IImageService _imageService;
 
-    public SalonsController(ApplicationDbContext context)
+    public SalonsController(ApplicationDbContext context, IImageService imageService)
     {
         _context = context;
+        _imageService = imageService;
     }
 
     // GET: api/Salons
@@ -29,6 +33,7 @@ public class SalonsController : ControllerBase
                 s.City,
                 s.Address,
                 s.Phone,
+                s.ImageIds,
                 EmployeeCount = s.Barbers.Count(b => !b.IsDeleted),
                 Rating = s.Rating,
                 IsActive = s.IsActive
@@ -101,6 +106,27 @@ public class SalonsController : ControllerBase
         await _context.SaveChangesAsync();
 
         return CreatedAtAction("GetSalon", new { id = salon.Id }, salon);
+    }
+
+    // POST: api/Salons/5/upload-image
+    [HttpPost("{id}/upload-image")]
+    [RequestSizeLimit(10 * 1024 * 1024)]
+    public async Task<ActionResult<Image>> UploadSalonImage(int id, IFormFile file)
+    {
+        var salon = await _context.Salons.FindAsync(id);
+        if (salon == null) return NotFound();
+
+        var image = await _imageService.UploadImageAsync(file, "salon", id, "Salon");
+
+        // Append image ID to ImageIds JSON array
+        var imageIds = string.IsNullOrEmpty(salon.ImageIds) 
+            ? new List<string>() 
+            : JsonSerializer.Deserialize<List<string>>(salon.ImageIds) ?? new List<string>();
+        imageIds.Add(image.Id);
+        salon.ImageIds = JsonSerializer.Serialize(imageIds);
+        await _context.SaveChangesAsync();
+
+        return Ok(image);
     }
 
     // DELETE: api/Salons/5

@@ -10,6 +10,7 @@ class Salon {
   final String postalCode;
   final String country;
   final String? website;
+  final String? imageIds;
   bool isActive;
 
   Salon({
@@ -21,6 +22,7 @@ class Salon {
     required this.postalCode,
     required this.country,
     this.website,
+    this.imageIds,
     this.employeeCount = 0,
     this.rating = 0.0,
     this.isActive = true,
@@ -36,6 +38,7 @@ class Salon {
       postalCode: json['postalCode'] ?? '',
       country: json['country'] ?? '',
       website: json['website'],
+      imageIds: json['imageIds'],
       employeeCount: (json['employeeCount'] as num?)?.toInt() ?? 0,
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
       isActive: json['isActive'] ?? true,

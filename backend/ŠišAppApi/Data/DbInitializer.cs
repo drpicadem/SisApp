@@ -35,7 +35,7 @@ namespace ŠišAppApi.Data
         {
                 // Apply migrations automatically
                 // Use EnsureCreated to match DB to current Code Model (bypassing old migrations)
-                context.Database.EnsureCreated();
+                context.Database.Migrate();
 
                 if (!context.Salons.Any())
                 {

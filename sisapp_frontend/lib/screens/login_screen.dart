@@ -76,6 +76,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         );
                 },
               ),
+              SizedBox(height: 16),
+              TextButton(
+                onPressed: () {
+                  Navigator.pushReplacementNamed(context, '/register');
+                },
+                child: Text(
+                  'Nemate nalog? Registrujte se',
+                  style: TextStyle(color: Colors.blue),
+                ),
+              ),
             ],
           ),
         ),

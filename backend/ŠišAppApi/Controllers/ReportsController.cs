@@ -20,14 +20,14 @@ public class ReportsController : ControllerBase
     [HttpGet("stats")]
     public async Task<ActionResult<object>> GetStats()
     {
-        var totalUsers = await _context.Users.CountAsync(u => u.Role == "Customer" && u.IsActive);
+        var totalUsers = await _context.Users.CountAsync(u => u.Role == "User" && u.IsActive);
         var totalBarbers = await _context.Barbers.CountAsync();
         var totalSalons = await _context.Salons.CountAsync();
         
         // For line chart: Users created per month in 2024/2025
         var currentYear = DateTime.Now.Year;
         var monthlyRegistrations = await _context.Users
-            .Where(u => u.Role == "Customer" && u.CreatedAt.Year == currentYear)
+            .Where(u => u.Role == "User" && u.CreatedAt.Year == currentYear)
             .GroupBy(u => u.CreatedAt.Month)
             .Select(g => new { Month = g.Key, Count = g.Count() })
             .OrderBy(x => x.Month)

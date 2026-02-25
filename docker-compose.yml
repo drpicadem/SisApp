@@ -43,11 +43,21 @@ services:
       - Jwt__Key=${JWT_KEY}
       - Jwt__Issuer=${JWT_ISSUER}
       - Jwt__Audience=${JWT_AUDIENCE}
+      - Jwt__ExpirationInMinutes=${JWT_EXPIRATION}
       - Stripe__SecretKey=${STRIPE_SECRET_KEY}
       - Stripe__PublishableKey=${STRIPE_PUBLISHABLE_KEY}
       - Twilio__AccountSid=${TWILIO_ACCOUNT_SID}
       - Twilio__AuthToken=${TWILIO_AUTH_TOKEN}
       - Twilio__PhoneNumber=${TWILIO_PHONE_NUMBER}
+      - EmailSettings__SenderEmail=${SENDER_EMAIL}
+      - EmailSettings__SenderPassword=${SENDER_PASSWORD}
+      - EmailSettings__SmtpServer=${SMTP_SERVER}
+      - EmailSettings__SmtpPort=${SMTP_PORT}
+      - PayPal__ClientId=${PAYPAL_CLIENT_ID}
+      - PayPal__Secret=${PAYPAL_SECRET}
+      - PayPal__BaseUrl=${PAYPAL_BASE_URL}
+    volumes:
+      - uploads_data:/app/wwwroot/uploads
     networks:
       - sisapp-network
 
@@ -64,6 +74,8 @@ services:
       - RabbitMQ__Host=${RABBITMQ_HOST}
       - EmailSettings__SenderEmail=${SENDER_EMAIL}
       - EmailSettings__SenderPassword=${SENDER_PASSWORD}
+      - EmailSettings__SmtpServer=${SMTP_SERVER}
+      - EmailSettings__SmtpPort=${SMTP_PORT}
     networks:
       - sisapp-network
 
@@ -73,3 +85,4 @@ networks:
 
 volumes:
   sqlvolume:
+  uploads_data:

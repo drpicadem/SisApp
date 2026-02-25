@@ -30,20 +30,20 @@ class BarberProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> addBarber(CreateBarberDto dto) async {
-    if (_authProvider?.tokenResponse == null) return false;
+  Future<int?> addBarber(CreateBarberDto dto) async {
+    if (_authProvider?.tokenResponse == null) return null;
 
     _isLoading = true;
     notifyListeners();
 
-    bool success = await _apiService.createBarber(dto, _authProvider!.tokenResponse!.token);
+    int? createdId = await _apiService.createBarber(dto, _authProvider!.tokenResponse!.token);
     
-    if (success) {
+    if (createdId != null) {
       await loadBarbers(dto.salonId);
     }
 
     _isLoading = false;
     notifyListeners();
-    return success;
+    return createdId;
   }
 }

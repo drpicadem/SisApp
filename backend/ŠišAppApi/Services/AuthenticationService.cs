@@ -4,8 +4,10 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using ŠišAppApi.Data;
+using ŠišAppApi.Filters;
 using ŠišAppApi.Models;
 using ŠišAppApi.Models.Authentication;
+using ŠišAppApi.Models.DTOs.Auth;
 
 namespace ŠišAppApi.Services
 {
@@ -41,6 +43,48 @@ namespace ŠišAppApi.Services
             await _context.SaveChangesAsync();
 
             Console.WriteLine($"[Auth] Login successful for: {request.Username}");
+            return GenerateToken(user);
+        }
+
+        public async Task<TokenResponse> Register(RegisterDto request)
+        {
+            if (await _context.Users.AnyAsync(u => u.Username.ToLower() == request.Username.ToLower()))
+            {
+                throw new UserException("Korisničko ime je već zauzeto");
+            }
+
+            if (await _context.Users.AnyAsync(u => u.Email.ToLower() == request.Email.ToLower()))
+            {
+                throw new UserException("Email adresa je već registrovana");
+            }
+
+            var user = new User
+            {
+                Username = request.Username,
+                Email = request.Email,
+                PasswordHash = HashPassword(request.Password),
+                FirstName = request.FirstName,
+                LastName = request.LastName,
+                PhoneNumber = request.PhoneNumber,
+                Role = "User",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                IsEmailVerified = true
+            };
+
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+
+            var customer = new Customer
+            {
+                UserId = user.Id,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Customers.Add(customer);
+            await _context.SaveChangesAsync();
+
+            Console.WriteLine($"[Auth] Registration successful for: {request.Username}");
             return GenerateToken(user);
         }
 
@@ -97,11 +141,11 @@ namespace ŠišAppApi.Services
                 signingCredentials: credentials
             );
 
-            var refreshToken = Guid.NewGuid().ToString();
+            var newRefreshToken = Guid.NewGuid().ToString();
             var refreshTokenEntity = new RefreshToken
             {
                 UserId = user.Id,
-                Token = refreshToken,
+                Token = newRefreshToken,
                 ExpiresAt = DateTime.UtcNow.AddDays(7),
                 CreatedAt = DateTime.UtcNow
             };
@@ -111,7 +155,7 @@ namespace ŠišAppApi.Services
             return new TokenResponse
             {
                 Token = new JwtSecurityTokenHandler().WriteToken(token),
-                RefreshToken = refreshToken,
+                RefreshToken = newRefreshToken,
                 Expiration = token.ValidTo
             };
         }

@@ -11,6 +11,7 @@ import 'providers/appointment_provider.dart';
 import 'providers/review_provider.dart';
 import 'providers/working_hours_provider.dart';
 import 'screens/login_screen.dart';
+import 'screens/register_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/services_screen.dart';
 import 'screens/barbers_screen.dart';
@@ -77,6 +78,7 @@ class MyApp extends StatelessWidget {
         home: LoginScreen(),
         routes: {
           '/login': (context) => LoginScreen(),
+          '/register': (context) => RegisterScreen(),
           '/home': (context) => HomeScreen(),
           '/services': (context) => ServicesScreen(),
           '/barbers': (context) => BarbersScreen(),
