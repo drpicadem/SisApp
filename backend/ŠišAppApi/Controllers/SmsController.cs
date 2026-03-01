@@ -6,8 +6,11 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ŠišAppApi.Controllers;
 
+using Microsoft.AspNetCore.Authorization;
+
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class SmsController : ControllerBase
 {
     private readonly ISmsService _smsService;

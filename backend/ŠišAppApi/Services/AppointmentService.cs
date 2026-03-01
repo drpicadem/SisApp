@@ -26,25 +26,18 @@ namespace ŠišAppApi.Services
 
             if (search != null)
             {
-                // RBAC Filtering & Logging
-                Console.WriteLine($"[RBAC DEBUG] Service - Filtering for Role: {search.CurrentUserRole}, UserId: {search.CurrentUserId}");
-                
                 // 1. RBAC Filters
                 if (search.CurrentUserRole == "User" && search.CurrentUserId.HasValue)
                 {
-                    Console.WriteLine($"[RBAC DEBUG] Service - Applying User Filter: {search.CurrentUserId}");
                     query = query.Where(a => a.UserId == search.CurrentUserId);
                 }
                 else if (search.CurrentUserRole == "Barber" && search.CurrentUserId.HasValue)
                 {
-                     // Barbers see appointments assigned to them
-                     Console.WriteLine($"[RBAC DEBUG] Service - Applying Barber Filter for UserID: {search.CurrentUserId}");
-                     // Assuming Barber entity has a Link to UserId. 
                      query = query.Where(a => a.Barber.UserId == search.CurrentUserId);
                 }
                 else if (search.CurrentUserRole == "Admin" || search.CurrentUserRole == "SuperAdmin") 
                 {
-                     Console.WriteLine($"[RBAC DEBUG] Service - Admin access, viewing all (unless filtered by specific fields)");
+                    
                 }
 
                 // 2. Specific Filters
@@ -77,11 +70,13 @@ namespace ŠišAppApi.Services
                 {
                     if (search.IsActive.Value)
                     {
-                        query = query.Where(a => a.AppointmentDateTime >= DateTime.UtcNow);
+                        // Active = future date AND not cancelled
+                        query = query.Where(a => a.AppointmentDateTime >= DateTime.UtcNow && a.Status != "Cancelled");
                     }
                     else
                     {
-                        query = query.Where(a => a.AppointmentDateTime < DateTime.UtcNow);
+                        // History = past date OR cancelled
+                        query = query.Where(a => a.AppointmentDateTime < DateTime.UtcNow || a.Status == "Cancelled");
                     }
                 }
 
@@ -125,17 +120,26 @@ namespace ŠišAppApi.Services
              // 1. Validation Logic
              var appDateTime = request.AppointmentDateTime;
              // Fetch service duration or default to 30
-             int duration = 30; // TODO: Fetch from Service
-             
+             int duration = 30;
+             if (request.ServiceId > 0)
+             {
+                 var service = await _context.Services.FindAsync(request.ServiceId);
+                 if (service != null && service.DurationMinutes > 0)
+                     duration = service.DurationMinutes;
+             }
              
              var newAppEnd = appDateTime.AddMinutes(duration);
 
-             var isTaken = await _context.Appointments.AnyAsync(a => 
-                a.BarberId == request.BarberId && 
-                a.Status != "Cancelled" &&
-                a.AppointmentDateTime < newAppEnd && 
-                a.AppointmentDateTime.AddMinutes(30) > appDateTime 
-             );
+             var isTaken = await _context.Appointments
+                 .Include(a => a.Service)
+                 .AnyAsync(a => 
+                    a.BarberId == request.BarberId && 
+                    a.Status != "Cancelled" &&
+                    a.AppointmentDateTime < newAppEnd && 
+                    a.AppointmentDateTime.AddMinutes(
+                        (a.Service != null && a.Service.DurationMinutes > 0) ? a.Service.DurationMinutes : 30
+                    ) > appDateTime 
+                 );
 
              if (isTaken)
              {
@@ -168,8 +172,9 @@ namespace ŠišAppApi.Services
             int durationMinutes = 30; // Default
             if (serviceId.HasValue)
             {
-               // var service = await _context.Services.FindAsync(serviceId);
-               // if (service != null) durationMinutes = service.Duration;
+               var service = await _context.Services.FindAsync(serviceId.Value);
+               if (service != null && service.DurationMinutes > 0)
+                   durationMinutes = service.DurationMinutes;
             }
 
             // 2. Get Working Hours
@@ -198,14 +203,32 @@ namespace ŠišAppApi.Services
             var endDateTime = date.ToDateTime(TimeOnly.MaxValue);
             
             var existingAppointments = await _context.Appointments
-                .Where(a => a.BarberId == barberId && 
+                .Include(a => a.Service)
+                .Where(a =>
+                            a.BarberId == barberId &&
                             a.AppointmentDateTime >= startDateTime && 
                             a.AppointmentDateTime <= endDateTime &&
                             a.Status != "Cancelled")
                 .ToListAsync();
 
             // 4. Generate slots
-            var now = DateTime.Now;
+            TimeZoneInfo tz;
+            try 
+            {
+                tz = TimeZoneInfo.FindSystemTimeZoneById("Europe/Sarajevo");
+            } 
+            catch 
+            {   
+                try 
+                {
+                    tz = TimeZoneInfo.FindSystemTimeZoneById("Central European Standard Time");
+                } 
+                catch 
+                {
+                    tz = TimeZoneInfo.Local;
+                }
+            }
+            var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
             var isToday = date == DateOnly.FromDateTime(now);
             var currentTimeNow = TimeOnly.FromDateTime(now);
 
@@ -216,14 +239,15 @@ namespace ŠišAppApi.Services
 
                 if (isToday && TimeOnly.FromTimeSpan(currentTime) <= currentTimeNow) 
                 {
-                     currentTime = currentTime.Add(TimeSpan.FromMinutes(30));
+                     currentTime = currentTime.Add(TimeSpan.FromMinutes(durationMinutes));
                      continue;
                 }
 
-                bool isOverlap = existingAppointments.Any(a => 
+                bool isOverlap = existingAppointments.Any(a =>
                 {
                     var appStart = a.AppointmentDateTime;
-                    var appEnd = appStart.AddMinutes(30); 
+                    var existingDuration = (a.Service != null && a.Service.DurationMinutes > 0) ? a.Service.DurationMinutes : 30;
+                    var appEnd = appStart.AddMinutes(existingDuration);
                     return (slotStart < appEnd && slotEnd > appStart);
                 });
 
@@ -232,7 +256,7 @@ namespace ŠišAppApi.Services
                     availableSlots.Add(currentTime.ToString(@"hh\:mm"));
                 }
 
-                currentTime = currentTime.Add(TimeSpan.FromMinutes(30)); 
+                currentTime = currentTime.Add(TimeSpan.FromMinutes(durationMinutes)); 
             }
 
             return availableSlots;

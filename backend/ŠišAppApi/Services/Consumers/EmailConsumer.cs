@@ -56,8 +56,7 @@ namespace ŠišAppApi.Services.Consumers
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error sending email to {message.ToEmail}");
-                // We might want to throw here to let MassTransit retry, 
-                // but for now let's just log it to avoid poison message loops if config is wrong.
+                
             }
         }
     }

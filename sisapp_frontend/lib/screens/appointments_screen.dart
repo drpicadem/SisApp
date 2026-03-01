@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart'; // Import for locale initialization
 import '../providers/appointment_provider.dart';
+import '../providers/auth_provider.dart';
 import '../models/appointment.dart';
 import 'review_form_screen.dart';
 
@@ -436,8 +437,9 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
                 ),
               ),
 
-            // 5. Review Button (for Completed/Paid appointments)
-            if (appointment.status == 'Completed' || appointment.paymentStatus == 'Paid')
+            // 5. Review Button (for Completed/Paid appointments - only for customers, not barbers)
+            if ((appointment.status == 'Completed' || appointment.paymentStatus == 'Paid') &&
+                !context.read<AuthProvider>().isBarber)
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: Row(

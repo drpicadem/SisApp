@@ -5,8 +5,11 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ŠišAppApi.Controllers;
 
+using Microsoft.AspNetCore.Authorization;
+
 [Route("api/[controller]")]
 [ApiController]
+[Authorize]
 public class PayPalController : ControllerBase
 {
     private readonly IConfiguration _config;

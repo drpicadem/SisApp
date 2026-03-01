@@ -4,6 +4,7 @@ import '../services/api_service.dart';
 import '../models/appointment.dart';
 import 'auth_provider.dart';
 
+
 class PaymentProvider extends ChangeNotifier {
   bool _isLoading = false;
   final ApiService _apiService = ApiService();
@@ -13,7 +14,7 @@ class PaymentProvider extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
 
-  Future<void> initiatePayment(Appointment appointment, String serviceName, double amount) async {
+  Future<void> initiatePayment(Appointment appointment, String serviceName, double amount, String paymentMethod) async {
     if (_authProvider?.tokenResponse == null) return;
 
     _isLoading = true;
@@ -27,8 +28,9 @@ class PaymentProvider extends ChangeNotifier {
         amount,
         _authProvider!.userId,
         _authProvider!.email ?? 'noreply@sisapp.com',
-        "http://localhost:7100/api/Payment/success", 
-        "http://localhost:7100/api/Payment/cancel",
+        "${ApiService.baseUrl}/Payment/success", 
+        "${ApiService.baseUrl}/Payment/cancel",
+        paymentMethod
       );
 
       if (url != null) {

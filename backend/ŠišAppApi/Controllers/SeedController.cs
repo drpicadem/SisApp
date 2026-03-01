@@ -3,8 +3,11 @@ using ŠišAppApi.Data;
 
 namespace ŠišAppApi.Controllers;
 
+using Microsoft.AspNetCore.Authorization;
+
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class SeedController : ControllerBase
 {
     private readonly ApplicationDbContext _context;

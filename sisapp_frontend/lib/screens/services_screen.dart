@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/service_provider.dart';
 import '../providers/salon_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/barber_provider.dart';
 import '../models/service.dart';
 import '../models/salon.dart';
 
@@ -17,8 +18,31 @@ class _ServicesScreenState extends State<ServicesScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<SalonProvider>().loadSalons();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final authProvider = context.read<AuthProvider>();
+      
+      if (authProvider.isBarber) {
+        final barberProvider = context.read<BarberProvider>();
+        await barberProvider.loadMyBarberProfile();
+        if (barberProvider.myBarberProfile != null) {
+          final salonId = barberProvider.myBarberProfile!.salonId;
+          // Create a mock Salon object to satisfy _selectedSalon type requirement
+          setState(() {
+            _selectedSalon = Salon(
+              id: salonId, 
+              name: 'Moj Salon', 
+              address: '', 
+              city: '',
+              phone: '',
+              postalCode: '',
+              country: '',
+            );
+          });
+          context.read<ServiceProvider>().loadServices(salonId);
+        }
+      } else {
+        context.read<SalonProvider>().loadSalons();
+      }
     });
   }
 
@@ -30,37 +54,45 @@ class _ServicesScreenState extends State<ServicesScreen> {
       ),
       body: Column(
         children: [
-          // Salon selector
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Consumer<SalonProvider>(
-              builder: (context, salonProvider, child) {
-                if (salonProvider.isLoading) return LinearProgressIndicator();
+          // Salon selector (Admin only)
+          Consumer<AuthProvider>(
+            builder: (context, authProvider, _) {
+              if (authProvider.isBarber) {
+                return SizedBox.shrink(); // Hide dropdown for barbers
+              }
+              
+              return Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Consumer<SalonProvider>(
+                  builder: (context, salonProvider, child) {
+                    if (salonProvider.isLoading) return LinearProgressIndicator();
 
-                return DropdownButtonFormField<Salon>(
-                  value: _selectedSalon,
-                  decoration: InputDecoration(
-                    labelText: 'Odaberite salon',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.store),
-                  ),
-                  items: salonProvider.salons.map((salon) {
-                    return DropdownMenuItem(
-                      value: salon,
-                      child: Text(salon.name),
+                    return DropdownButtonFormField<Salon>(
+                      value: _selectedSalon,
+                      decoration: InputDecoration(
+                        labelText: 'Odaberite salon',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.store),
+                      ),
+                      items: salonProvider.salons.map((salon) {
+                        return DropdownMenuItem(
+                          value: salon,
+                          child: Text(salon.name),
+                        );
+                      }).toList(),
+                      onChanged: (Salon? newValue) {
+                        setState(() {
+                          _selectedSalon = newValue;
+                        });
+                        if (newValue != null) {
+                          context.read<ServiceProvider>().loadServices(newValue.id);
+                        }
+                      },
                     );
-                  }).toList(),
-                  onChanged: (Salon? newValue) {
-                    setState(() {
-                      _selectedSalon = newValue;
-                    });
-                    if (newValue != null) {
-                      context.read<ServiceProvider>().loadServices(newValue.id);
-                    }
                   },
-                );
-              },
-            ),
+                ),
+              );
+            }
           ),
 
           // Services list
@@ -74,7 +106,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       children: [
                         Icon(Icons.content_cut, size: 64, color: Colors.grey[300]),
                         SizedBox(height: 16),
-                        Text('Odaberite salon za pregled usluga',
+                        Text('Učitavam podatke ili odaberite salon',
                             style: TextStyle(color: Colors.grey[500], fontSize: 16)),
                       ],
                     ),

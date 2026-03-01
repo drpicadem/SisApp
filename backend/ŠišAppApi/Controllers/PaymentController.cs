@@ -8,11 +8,13 @@ using ŠišAppApi.Data;
 using ŠišAppApi.Models;
 using Microsoft.EntityFrameworkCore;
 using ŠišAppApi.Services; // Added for IEmailService and INotificationService
+using Microsoft.AspNetCore.Authorization;
 
 namespace ŠišAppApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class PaymentController : ControllerBase
 {
     private readonly IConfiguration _configuration;
@@ -35,7 +37,7 @@ public class PaymentController : ControllerBase
         {
             var options = new SessionCreateOptions
             {
-                PaymentMethodTypes = new List<string> { "card", "paypal" },
+                PaymentMethodTypes = new List<string> { (request.PaymentMethod?.ToLower() == "paypal") ? "paypal" : "card" },
                 LineItems = new List<SessionLineItemOptions>
                 {
                     new SessionLineItemOptions
@@ -169,6 +171,7 @@ public class PaymentController : ControllerBase
         return Ok(new { status = "Pending" });
     }
 
+    [AllowAnonymous]
     [HttpPost("webhook")]
     public async Task<IActionResult> HandleWebhook()
     {
@@ -263,6 +266,7 @@ public class PaymentController : ControllerBase
             return StatusCode(500, new { error = $"Greška prilikom obrade webhook-a: {ex.Message}" });
         }
     }
+    [AllowAnonymous]
     [HttpGet("success")]
     public ContentResult PaymentSuccess()
     {
@@ -297,6 +301,7 @@ public class PaymentController : ControllerBase
         };
     }
 
+    [AllowAnonymous]
     [HttpGet("cancel")]
     public ContentResult PaymentCancel()
     {
@@ -356,4 +361,5 @@ public class CheckoutSessionRequest
 
     public int? AppointmentId { get; set; }
     public int? CustomerId { get; set; }
+    public string? PaymentMethod { get; set; }
 } 

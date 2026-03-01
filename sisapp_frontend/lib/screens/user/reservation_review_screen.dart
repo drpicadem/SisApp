@@ -29,7 +29,7 @@ class ReservationReviewScreen extends StatefulWidget {
 class _ReservationReviewScreenState extends State<ReservationReviewScreen> {
   bool _isLoading = false;
 
-  void _confirmBooking({bool payOnline = false}) async {
+  void _confirmBooking({bool payOnline = false, String? paymentMethod}) async {
     setState(() => _isLoading = true);
     
     final bookingProvider = Provider.of<BookingProvider>(context, listen: false);
@@ -40,12 +40,13 @@ class _ReservationReviewScreenState extends State<ReservationReviewScreen> {
       final result = await bookingProvider.createAppointment(widget.appointment);
 
       if (result is Appointment) {
-        if (payOnline) {
+        if (payOnline && paymentMethod != null) {
           // 2. Initiate Payment
           await paymentProvider.initiatePayment(
             result,
             widget.serviceName,
             widget.price,
+            paymentMethod,
           );
           
           // Poll for status
@@ -113,6 +114,42 @@ class _ReservationReviewScreenState extends State<ReservationReviewScreen> {
     );
   }
 
+  void _showPaymentMethodSelector() {
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Odaberite način plaćanja", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            SizedBox(height: 10),
+            ListTile(
+              leading: Icon(Icons.credit_card, color: Colors.blue[800]),
+              title: Text("Kartica (Stripe)"),
+              onTap: () {
+                Navigator.pop(ctx);
+                _confirmBooking(payOnline: true, paymentMethod: 'card');
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.paypal, color: Colors.blue[800]),
+              title: Text("PayPal"),
+              onTap: () {
+                Navigator.pop(ctx);
+                _confirmBooking(payOnline: true, paymentMethod: 'paypal');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currencyFormatter = NumberFormat.currency(locale: 'bs', symbol: 'KM');
@@ -155,7 +192,7 @@ class _ReservationReviewScreenState extends State<ReservationReviewScreen> {
                 backgroundColor: Colors.blue[800],
                 foregroundColor: Colors.white,
               ),
-              onPressed: _isLoading ? null : () => _confirmBooking(payOnline: true),
+              onPressed: _isLoading ? null : () => _showPaymentMethodSelector(),
             ),
             SizedBox(height: 10),
             OutlinedButton.icon(

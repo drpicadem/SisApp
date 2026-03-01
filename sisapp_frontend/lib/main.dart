@@ -22,6 +22,7 @@ import 'screens/customer_home_screen.dart';
 import 'screens/booking_screen.dart';
 import 'screens/salon_details_screen.dart';
 import 'screens/appointments_screen.dart';
+import 'screens/barber/edit_salon_screen.dart';
 
 void main() {
   runApp(MyApp());
@@ -89,6 +90,7 @@ class MyApp extends StatelessWidget {
           '/booking': (context) => BookingScreen(),
           '/salon-details': (context) => SalonDetailsScreen(),
           '/appointments': (context) => AppointmentsScreen(),
+          '/edit_salon': (context) => EditSalonScreen(),
         },
       ),
     );

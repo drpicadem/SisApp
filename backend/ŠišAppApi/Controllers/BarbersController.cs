@@ -7,10 +7,15 @@ using ŠišAppApi.Services.Interfaces;
 using System.Security.Cryptography;
 using System.Text;
 
+using System.Security.Claims;
+
+using Microsoft.AspNetCore.Authorization;
+
 namespace ŠišAppApi.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize]
 public class BarbersController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
@@ -20,6 +25,36 @@ public class BarbersController : ControllerBase
     {
         _context = context;
         _imageService = imageService;
+    }
+
+    [HttpGet("my-profile")]
+    public async Task<ActionResult<object>> GetMyProfile()
+    {
+        var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!int.TryParse(userIdString, out int userId))
+        {
+            return Unauthorized();
+        }
+
+        var barber = await _context.Barbers
+            .Include(b => b.User)
+            .FirstOrDefaultAsync(b => b.UserId == userId && !b.IsDeleted);
+
+        if (barber == null)
+            return NotFound("Niste prijavljeni kao aktivan frizer.");
+
+        return Ok(new {
+            barber.Id,
+            barber.UserId,
+            barber.SalonId,
+            barber.Rating,
+            barber.Bio,
+            barber.ImageIds,
+            FirstName = barber.User.FirstName,
+            LastName = barber.User.LastName,
+            Email = barber.User.Email,
+            Username = barber.User.Username
+        });
     }
 
     // GET: api/Barbers/salon/1

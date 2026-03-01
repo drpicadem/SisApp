@@ -65,119 +65,133 @@ public class ReviewsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ReviewDto>> CreateReview([FromBody] CreateReviewDto dto)
     {
-        var userId = GetUserId();
-
-        var existing = await _context.Reviews
-            .FirstOrDefaultAsync(r => r.AppointmentId == dto.AppointmentId && r.UserId == userId);
-
-        if (existing != null)
-            throw new UserException("Recenzija već postoji za ovu rezervaciju.");
-
-        var appointment = await _context.Appointments
-            .Include(a => a.Barber)
-            .Include(a => a.Service)
-            .FirstOrDefaultAsync(a => a.Id == dto.AppointmentId);
-
-        if (appointment == null)
-            throw new UserException("Termin nije pronađen.");
-
-        if (appointment.Status != "Completed" && appointment.PaymentStatus != "Paid")
-            throw new UserException("Možete ostaviti recenziju samo za završene ili plaćene termine.");
-
-        if (appointment.UserId != userId)
-            throw new UserException("Možete ostaviti recenziju samo za svoje termine.");
-
-        if (appointment.BarberId != dto.BarberId)
-            throw new UserException("Navedeni frizer nije radio ovaj termin.");
-
-        var review = new Review
+        try
         {
-            AppointmentId = dto.AppointmentId,
-            UserId = userId,
-            BarberId = dto.BarberId,
-            SalonId = appointment.SalonId,
-            Rating = dto.Rating,
-            Comment = dto.Comment,
-            IsVerified = false,
-            IsHidden = false,
-            HelpfulCount = 0,
-            CreatedAt = DateTime.UtcNow
-        };
+            var userId = GetUserId();
 
-        _context.Reviews.Add(review);
+            var existing = await _context.Reviews
+                .FirstOrDefaultAsync(r => r.AppointmentId == dto.AppointmentId && r.UserId == userId);
 
-        // Update barber average rating
-        var barber = await _context.Barbers.FindAsync(dto.BarberId);
-        if (barber != null)
-        {
-            var barberReviews = await _context.Reviews
-                .Where(r => r.BarberId == dto.BarberId)
-                .ToListAsync();
-            var allRatings = barberReviews.Select(r => r.Rating).Append(dto.Rating).ToList();
-            barber.Rating = allRatings.Average();
-            barber.ReviewCount = allRatings.Count;
+            if (existing != null)
+                throw new UserException("Recenzija već postoji za ovu rezervaciju.");
+
+            var appointment = await _context.Appointments
+                .Include(a => a.Barber)
+                .Include(a => a.Service)
+                .FirstOrDefaultAsync(a => a.Id == dto.AppointmentId);
+
+            if (appointment == null)
+                throw new UserException("Termin nije pronađen.");
+
+            if (appointment.Status != "Completed" && appointment.PaymentStatus != "Paid")
+                throw new UserException("Možete ostaviti recenziju samo za završene ili plaćene termine.");
+
+            if (appointment.UserId != userId)
+                throw new UserException($"Možete ostaviti recenziju samo za svoje termine. (TokenID={userId}, AppID={appointment.UserId})");
+
+            if (appointment.BarberId != dto.BarberId)
+                throw new UserException("Navedeni frizer nije radio ovaj termin.");
+
+            var review = new Review
+            {
+                AppointmentId = dto.AppointmentId,
+                UserId = userId,
+                BarberId = dto.BarberId,
+                SalonId = appointment.SalonId,
+                Rating = dto.Rating,
+                Comment = dto.Comment,
+                IsVerified = false,
+                IsHidden = false,
+                HelpfulCount = 0,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Reviews.Add(review);
+
+            // Update barber average rating
+            var barber = await _context.Barbers.FindAsync(dto.BarberId);
+            if (barber != null)
+            {
+                var barberReviews = await _context.Reviews
+                    .Where(r => r.BarberId == dto.BarberId)
+                    .ToListAsync();
+                var allRatings = barberReviews.Select(r => r.Rating).Append(dto.Rating).ToList();
+                barber.Rating = allRatings.Average();
+                barber.ReviewCount = allRatings.Count;
+            }
+
+            // Update salon average rating
+            var salon = await _context.Salons.FindAsync(appointment.SalonId);
+            if (salon != null)
+            {
+                var salonReviews = await _context.Reviews
+                    .Where(r => r.SalonId == appointment.SalonId)
+                    .ToListAsync();
+                var allRatings = salonReviews.Select(r => r.Rating).Append(dto.Rating).ToList();
+                salon.Rating = allRatings.Average();
+            }
+
+            await _context.SaveChangesAsync();
+
+            var created = await IncludeAll().FirstOrDefaultAsync(r => r.Id == review.Id);
+            return Ok(MapToDto(created!));
         }
-
-        // Update salon average rating
-        var salon = await _context.Salons.FindAsync(appointment.SalonId);
-        if (salon != null)
+        catch (UserException ex)
         {
-            var salonReviews = await _context.Reviews
-                .Where(r => r.SalonId == appointment.SalonId)
-                .ToListAsync();
-            var allRatings = salonReviews.Select(r => r.Rating).Append(dto.Rating).ToList();
-            salon.Rating = allRatings.Average();
+            return BadRequest(new { userError = ex.Message });
         }
-
-        await _context.SaveChangesAsync();
-
-        var created = await IncludeAll().FirstOrDefaultAsync(r => r.Id == review.Id);
-        return Ok(MapToDto(created!));
     }
 
     [HttpPut("{id}")]
     public async Task<ActionResult<ReviewDto>> UpdateReview(int id, [FromBody] CreateReviewDto dto)
     {
-        var userId = GetUserId();
-
-        var review = await _context.Reviews.FirstOrDefaultAsync(r => r.Id == id);
-        if (review == null)
-            throw new UserException("Recenzija nije pronađena.");
-
-        if (review.UserId != userId)
-            throw new UserException("Možete ažurirati samo svoje recenzije.");
-
-        review.Rating = dto.Rating;
-        review.Comment = dto.Comment;
-        review.UpdatedAt = DateTime.UtcNow;
-
-        // Recalculate barber rating
-        var barber = await _context.Barbers.FindAsync(review.BarberId);
-        if (barber != null)
+        try
         {
-            var barberReviews = await _context.Reviews
-                .Where(r => r.BarberId == review.BarberId)
-                .ToListAsync();
-            barber.Rating = barberReviews.Select(r => r.Id == id ? dto.Rating : r.Rating).Average();
-            barber.ReviewCount = barberReviews.Count;
-        }
+            var userId = GetUserId();
 
-        if (review.SalonId.HasValue)
-        {
-            var salon = await _context.Salons.FindAsync(review.SalonId);
-            if (salon != null)
+            var review = await _context.Reviews.FirstOrDefaultAsync(r => r.Id == id);
+            if (review == null)
+                throw new UserException("Recenzija nije pronađena.");
+
+            if (review.UserId != userId)
+                throw new UserException("Možete ažurirati samo svoje recenzije.");
+
+            review.Rating = dto.Rating;
+            review.Comment = dto.Comment;
+            review.UpdatedAt = DateTime.UtcNow;
+
+            // Recalculate barber rating
+            var barber = await _context.Barbers.FindAsync(review.BarberId);
+            if (barber != null)
             {
-                var salonReviews = await _context.Reviews
-                    .Where(r => r.SalonId == review.SalonId)
+                var barberReviews = await _context.Reviews
+                    .Where(r => r.BarberId == review.BarberId)
                     .ToListAsync();
-                salon.Rating = salonReviews.Select(r => r.Id == id ? dto.Rating : r.Rating).Average();
+                barber.Rating = barberReviews.Select(r => r.Id == id ? dto.Rating : r.Rating).Average();
+                barber.ReviewCount = barberReviews.Count;
             }
+
+            if (review.SalonId.HasValue)
+            {
+                var salon = await _context.Salons.FindAsync(review.SalonId);
+                if (salon != null)
+                {
+                    var salonReviews = await _context.Reviews
+                        .Where(r => r.SalonId == review.SalonId)
+                        .ToListAsync();
+                    salon.Rating = salonReviews.Select(r => r.Id == id ? dto.Rating : r.Rating).Average();
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            var updated = await IncludeAll().FirstOrDefaultAsync(r => r.Id == id);
+            return Ok(MapToDto(updated!));
         }
-
-        await _context.SaveChangesAsync();
-
-        var updated = await IncludeAll().FirstOrDefaultAsync(r => r.Id == id);
-        return Ok(MapToDto(updated!));
+        catch (UserException ex)
+        {
+            return BadRequest(new { userError = ex.Message });
+        }
     }
 
     [HttpGet("my-reviews")]

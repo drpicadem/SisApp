@@ -2,13 +2,16 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'api_service.dart';
 
 class ImageService {
-  static const String baseUrl = 'http://localhost:7100/api';
+  static String get baseUrl => ApiService.baseUrl;
 
   /// Returns the full URL for an image path (e.g. /uploads/profile/abc.jpg)
   static String getFullImageUrl(String relativePath) {
-    return 'http://localhost:7100$relativePath';
+    // Derive server root from API base URL (strip /api suffix)
+    final serverRoot = ApiService.baseUrl.replaceAll(RegExp(r'/api$'), '');
+    return '$serverRoot$relativePath';
   }
 
   /// Upload an image file and return the Image metadata from the server

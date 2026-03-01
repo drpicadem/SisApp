@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using ŠišAppApi.Models;
 using ŠišAppApi.Services.Interfaces;
 
@@ -6,6 +7,7 @@ namespace ŠišAppApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class ImagesController : ControllerBase
 {
     private readonly IImageService _imageService;
@@ -27,6 +29,7 @@ public class ImagesController : ControllerBase
         return Ok(image);
     }
 
+    [AllowAnonymous]
     [HttpGet("{id}")]
     public async Task<ActionResult<Image>> GetById(string id)
     {
@@ -35,6 +38,7 @@ public class ImagesController : ControllerBase
         return Ok(image);
     }
 
+    [AllowAnonymous]
     [HttpGet("entity/{entityType}/{entityId}")]
     public async Task<ActionResult<List<Image>>> GetByEntity(string entityType, int entityId)
     {

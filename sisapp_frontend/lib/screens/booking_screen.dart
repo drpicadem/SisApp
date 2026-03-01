@@ -121,7 +121,15 @@ class _BookingScreenState extends State<BookingScreen> {
           onChanged: (value) {
             setState(() {
               _selectedService = value;
+              _selectedTimeSlot = null;
             });
+            if (_selectedBarber != null && value != null) {
+              context.read<BookingProvider>().fetchAvailableSlots(
+                _selectedBarber!.id,
+                _selectedDate,
+                serviceId: value.id,
+              );
+            }
           },
         );
       },
@@ -143,7 +151,11 @@ class _BookingScreenState extends State<BookingScreen> {
                _selectedTimeSlot = null;
              });
              if (value != null) {
-                context.read<BookingProvider>().fetchAvailableSlots(value.id, _selectedDate);
+                context.read<BookingProvider>().fetchAvailableSlots(
+                  value.id,
+                  _selectedDate,
+                  serviceId: _selectedService?.id,
+                );
              }
           },
         );
@@ -172,7 +184,11 @@ class _BookingScreenState extends State<BookingScreen> {
                 _selectedTimeSlot = null;
               });
               if (_selectedBarber != null) {
-                 context.read<BookingProvider>().fetchAvailableSlots(_selectedBarber!.id, picked);
+                 context.read<BookingProvider>().fetchAvailableSlots(
+                   _selectedBarber!.id,
+                   picked,
+                   serviceId: _selectedService?.id,
+                 );
               }
             }
           },

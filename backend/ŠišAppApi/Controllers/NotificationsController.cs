@@ -19,8 +19,7 @@ namespace ŠišAppApi.Controllers
         [HttpGet("{userId}")]
         public async Task<IActionResult> Get(int userId, [FromQuery] bool unreadOnly = false)
         {
-            // Simple security check: Ensure user can only read their own notifications
-            // In a real app, you'd check User.Identity.Name or Claims
+            
             var notifications = await _notificationService.GetUserNotifications(userId, unreadOnly);
             return Ok(notifications);
         }

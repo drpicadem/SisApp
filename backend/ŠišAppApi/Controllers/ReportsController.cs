@@ -3,10 +3,13 @@ using Microsoft.EntityFrameworkCore;
 using ŠišAppApi.Data;
 using ŠišAppApi.Models;
 
+using Microsoft.AspNetCore.Authorization;
+
 namespace ŠišAppApi.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize]
 public class ReportsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;

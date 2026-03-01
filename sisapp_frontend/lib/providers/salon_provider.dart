@@ -5,6 +5,7 @@ import '../providers/auth_provider.dart';
 
 class SalonProvider extends ChangeNotifier {
   List<Salon> _salons = [];
+  Set<int> _favoriteSalonIds = {};
   bool _isLoading = false;
   final ApiService _apiService = ApiService();
   final AuthProvider? _authProvider;
@@ -12,6 +13,7 @@ class SalonProvider extends ChangeNotifier {
   SalonProvider(this._authProvider);
 
   List<Salon> get salons => _salons;
+  Set<int> get favoriteSalonIds => _favoriteSalonIds;
   bool get isLoading => _isLoading;
 
   Future<void> loadSalons() async {
@@ -22,12 +24,40 @@ class SalonProvider extends ChangeNotifier {
 
     try {
       _salons = await _apiService.getSalons(_authProvider!.tokenResponse!.token);
+      final favList = await _apiService.getFavoriteSalons(_authProvider!.tokenResponse!.token);
+      _favoriteSalonIds = favList.toSet();
     } catch (e) {
-      print('Error loading salons: $e');
+      print('Error loading salons/favorites: $e');
     }
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  Future<void> toggleFavorite(int salonId) async {
+    if (_authProvider?.tokenResponse == null) return;
+    
+    // Optimistic UI update
+    final wasFavorite = _favoriteSalonIds.contains(salonId);
+    if (wasFavorite) {
+      _favoriteSalonIds.remove(salonId);
+    } else {
+      _favoriteSalonIds.add(salonId);
+    }
+    notifyListeners();
+
+    // API call
+    bool success = await _apiService.toggleFavoriteSalon(salonId, _authProvider!.tokenResponse!.token);
+    
+    // Rollback if failed
+    if (!success) {
+      if (wasFavorite) {
+        _favoriteSalonIds.add(salonId);
+      } else {
+        _favoriteSalonIds.remove(salonId);
+      }
+      notifyListeners();
+    }
   }
 
   Future<int?> addSalon(Salon salon) async {
@@ -45,6 +75,27 @@ class SalonProvider extends ChangeNotifier {
     _isLoading = false;
     notifyListeners();
     return createdId;
+  }
+
+  Future<bool> updateSalon(Salon salon) async {
+    if (_authProvider?.tokenResponse == null) return false;
+
+    _isLoading = true;
+    notifyListeners();
+
+    bool success = await _apiService.updateSalon(salon, _authProvider!.tokenResponse!.token);
+    
+    if (success) {
+      // Update local state
+      final index = _salons.indexWhere((s) => s.id == salon.id);
+      if (index != -1) {
+        _salons[index] = salon;
+      }
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return success;
   }
 
   Future<bool> toggleStatus(Salon salon) async {

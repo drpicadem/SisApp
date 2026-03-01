@@ -11,6 +11,9 @@ class Salon {
   final String country;
   final String? website;
   final String? imageIds;
+  final double? latitude;
+  final double? longitude;
+  final List<String>? services;
   bool isActive;
 
   Salon({
@@ -23,6 +26,9 @@ class Salon {
     required this.country,
     this.website,
     this.imageIds,
+    this.latitude,
+    this.longitude,
+    this.services,
     this.employeeCount = 0,
     this.rating = 0.0,
     this.isActive = true,
@@ -41,12 +47,16 @@ class Salon {
       imageIds: json['imageIds'],
       employeeCount: (json['employeeCount'] as num?)?.toInt() ?? 0,
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      services: json['services'] != null ? List<String>.from(json['services']) : null,
       isActive: json['isActive'] ?? true,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'name': name,
       'city': city,
       'address': address,
@@ -54,8 +64,14 @@ class Salon {
       'postalCode': postalCode,
       'country': country,
       'website': website,
+      'imageIds': imageIds,
       // Default values for backend
-      'rating': 0,
+      'rating': rating,
+      'latitude': latitude,
+      'longitude': longitude,
+      'services': services,
+      'employeeCount': employeeCount,
+      'isActive': isActive,
     };
   }
 

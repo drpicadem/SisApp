@@ -75,7 +75,7 @@ class BookingProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> fetchAvailableSlots(int barberId, DateTime date) async {
+  Future<void> fetchAvailableSlots(int barberId, DateTime date, {int? serviceId}) async {
     if (_authProvider?.tokenResponse == null) return;
     
     _isLoading = true;
@@ -86,6 +86,7 @@ class BookingProvider extends ChangeNotifier {
         barberId,
         date,
         _authProvider!.tokenResponse!.token,
+        serviceId: serviceId,
       );
     } catch (e) {
       print('Error fetching slots: $e');

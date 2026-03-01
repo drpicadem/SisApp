@@ -49,41 +49,14 @@ class _SalonDetailsScreenState extends State<SalonDetailsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Hero salon image
-            Stack(
-              children: [
-                EntityImage(
-                  entityType: 'Salon',
-                  entityId: salon.id,
-                  token: token,
-                  height: 220,
-                  width: double.infinity,
-                  placeholderIcon: Icons.store,
-                  placeholderIconSize: 80,
-                ),
-                // Salon logo/name overlay
-                Positioned(
-                  bottom: -30,
-                  left: 16,
-                  child: Container(
-                    width: 70,
-                    height: 70,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 6,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Icon(Icons.content_cut, size: 32, color: Color(0xFF7B5EA7)),
-                    ),
-                  ),
-                ),
-              ],
+            EntityImage(
+              entityType: 'Salon',
+              entityId: salon.id,
+              token: token,
+              height: 220,
+              width: double.infinity,
+              placeholderIcon: Icons.store,
+              placeholderIconSize: 80,
             ),
             SizedBox(height: 40),
             Padding(

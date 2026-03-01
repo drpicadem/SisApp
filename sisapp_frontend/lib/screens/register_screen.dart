@@ -165,6 +165,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 keyboardType: TextInputType.phone,
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Unesite broj telefona';
+                  final phoneRegex = RegExp(r'^\+?[\d\s\-]{8,15}$');
+                  if (!phoneRegex.hasMatch(value)) return 'Unesite validan broj telefona (npr. +387 61 123-456)';
                   return null;
                 },
               ),

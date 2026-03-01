@@ -27,9 +27,6 @@ namespace ŠišAppApi.Controllers
             search.CurrentUserId = GetUserId();
             search.CurrentUserRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
 
-            Console.WriteLine($"[RBAC DEBUG] GetAppointments - UserID: {search.CurrentUserId}, Role: {search.CurrentUserRole}");
-            Console.WriteLine($"[SEARCH DEBUG] Filters - From: {search.FromDate}, To: {search.ToDate}, Status: {search.Status}, UserId: {search.UserId}");
-
             return await base.Get(search);
         }
 

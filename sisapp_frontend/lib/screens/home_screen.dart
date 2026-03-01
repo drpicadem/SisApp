@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'barber_schedule_screen.dart';
 import 'barber_reviews_screen.dart';
+import 'barber/barber_dashboard_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   @override
@@ -26,7 +27,7 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      drawer: Drawer(
+      drawer: isBarber ? null : Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
@@ -70,33 +71,8 @@ class HomeScreen extends StatelessWidget {
               ),
             ],
 
-            // --- BARBER MENU ---
-            if (isBarber) ...[
-              ListTile(
-                leading: Icon(Icons.calendar_month),
-                title: Text('Moj Raspored'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => BarberScheduleScreen()));
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.star),
-                title: Text('Moje Recenzije'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => BarberReviewsScreen()));
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.history),
-                title: Text('Moje Rezervacije'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.of(context).pushNamed('/appointments');
-                },
-              ),
-            ],
+            // --- BARBER MENU REMOVED ---
+            // Barbers now use the main dashboard.
 
             // --- ADMIN MENU ---
             if (isAdmin) ...[
@@ -146,25 +122,27 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              isUser ? Icons.person : (isBarber ? Icons.content_cut : Icons.admin_panel_settings), 
-              size: 80, 
-              color: Colors.blue
+      body: isBarber 
+        ? BarberDashboardScreen()
+        : Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  isUser ? Icons.person : Icons.admin_panel_settings, 
+                  size: 80, 
+                  color: Colors.blue
+                ),
+                SizedBox(height: 20),
+                Text(
+                  'Dobrodošli, ${authProvider.username ?? "Korisnik"}!',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 10),
+                Text('Odaberite opciju iz menija lijevo.'),
+              ],
             ),
-            SizedBox(height: 20),
-            Text(
-              'Dobrodošli, ${authProvider.username ?? "Korisnik"}!',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 10),
-            Text('Odaberite opciju iz menija lijevo.'),
-          ],
-        ),
-      ),
+          ),
     );
   }
 }

@@ -4,10 +4,13 @@ using ŠišAppApi.Data;
 using ŠišAppApi.Models;
 using ŠišAppApi.Services.Interfaces;
 
+using Microsoft.AspNetCore.Authorization;
+
 namespace ŠišAppApi.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize]
 public class UsersController : ControllerBase
 {
     private readonly ApplicationDbContext _context;

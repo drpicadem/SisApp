@@ -13,6 +13,8 @@ class SalonsScreen extends StatefulWidget {
 }
 
 class _SalonsScreenState extends State<SalonsScreen> {
+  String _searchQuery = '';
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +49,13 @@ class _SalonsScreenState extends State<SalonsScreen> {
             );
           }
 
+          var salons = provider.salons.where((salon) {
+            final query = _searchQuery.toLowerCase();
+            return query.isEmpty ||
+                   salon.name.toLowerCase().contains(query) ||
+                   salon.city.toLowerCase().contains(query);
+          }).toList();
+
           return Padding(
             padding: const EdgeInsets.all(16.0),
             child: Card(
@@ -61,8 +70,28 @@ class _SalonsScreenState extends State<SalonsScreen> {
                       children: [
                         Icon(Icons.store, color: Color(0xFFE0CFA9)),
                         SizedBox(width: 8),
-                        Text('Saloni (${provider.salons.length})',
+                        Text('Saloni (${salons.length})',
                             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Spacer(),
+                        SizedBox(
+                          width: 250,
+                          child: TextField(
+                            decoration: InputDecoration(
+                              hintText: 'Pretraži po nazivu ili gradu...',
+                              prefixIcon: Icon(Icons.search, size: 20),
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            onChanged: (value) {
+                              setState(() {
+                                _searchQuery = value;
+                              });
+                            },
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -82,7 +111,7 @@ class _SalonsScreenState extends State<SalonsScreen> {
                             DataColumn(label: Text('Status')),
                             DataColumn(label: Text('Akcija')),
                           ],
-                          rows: provider.salons.map((salon) {
+                          rows: salons.map((salon) {
                             return DataRow(cells: [
                               DataCell(Text(salon.name, style: TextStyle(fontWeight: FontWeight.w600))),
                               DataCell(Text(salon.city)),

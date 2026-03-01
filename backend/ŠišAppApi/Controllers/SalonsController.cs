@@ -5,10 +5,13 @@ using ŠišAppApi.Data;
 using ŠišAppApi.Models;
 using ŠišAppApi.Services.Interfaces;
 
+using Microsoft.AspNetCore.Authorization;
+
 namespace ŠišAppApi.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize]
 public class SalonsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
@@ -26,6 +29,7 @@ public class SalonsController : ControllerBase
     {
         return await _context.Salons
             .Include(s => s.Barbers)
+            .Include(s => s.Services)
             .Select(s => new 
             {
                 s.Id,
@@ -33,7 +37,13 @@ public class SalonsController : ControllerBase
                 s.City,
                 s.Address,
                 s.Phone,
+                s.PostalCode,
+                s.Country,
+                s.Website,
                 s.ImageIds,
+                s.Latitude,
+                s.Longitude,
+                Services = s.Services.Where(serv => !serv.IsDeleted && serv.IsActive).Select(serv => serv.Name).ToList(),
                 EmployeeCount = s.Barbers.Count(b => !b.IsDeleted),
                 Rating = s.Rating,
                 IsActive = s.IsActive

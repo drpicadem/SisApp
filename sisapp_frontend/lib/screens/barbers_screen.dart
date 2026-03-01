@@ -24,8 +24,32 @@ class _BarbersScreenState extends State<BarbersScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<SalonProvider>().loadSalons();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final authProvider = context.read<AuthProvider>();
+      
+      if (authProvider.isBarber) {
+        final barberProvider = context.read<BarberProvider>();
+        await barberProvider.loadMyBarberProfile();
+        
+        if (barberProvider.myBarberProfile != null) {
+          final salonId = barberProvider.myBarberProfile!.salonId;
+          setState(() {
+            _selectedSalon = Salon(
+              id: salonId, 
+              name: 'Moj Salon', 
+              address: '', 
+              city: '',
+              phone: '',
+              postalCode: '',
+              country: '',
+            );
+          });
+          context.read<BarberProvider>().loadBarbers(salonId);
+          context.read<ServiceProvider>().loadServices(salonId);
+        }
+      } else {
+        context.read<SalonProvider>().loadSalons();
+      }
     });
   }
 
@@ -38,37 +62,45 @@ class _BarbersScreenState extends State<BarbersScreen> {
       body: Column(
         children: [
           // Filter Section
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Consumer<SalonProvider>(
-              builder: (context, salonProvider, child) {
-                 if (salonProvider.isLoading) return LinearProgressIndicator();
-                 
-                 return DropdownButtonFormField<Salon>(
-                   value: _selectedSalon,
-                   decoration: InputDecoration(
-                     labelText: 'Odaberite salon za pregled',
-                     border: OutlineInputBorder(),
-                     prefixIcon: Icon(Icons.store),
-                   ),
-                   items: salonProvider.salons.map((salon) {
-                     return DropdownMenuItem(
-                       value: salon,
-                       child: Text(salon.name),
-                     );
-                   }).toList(),
-                   onChanged: (Salon? newValue) {
-                     setState(() {
-                       _selectedSalon = newValue;
-                     });
-                     if (newValue != null) {
-                       context.read<BarberProvider>().loadBarbers(newValue.id);
-                       context.read<ServiceProvider>().loadServices(newValue.id);
-                     }
-                   },
-                 );
-              },
-            ),
+          Consumer<AuthProvider>(
+            builder: (context, authProvider, _) {
+              if (authProvider.isBarber) {
+                return SizedBox.shrink(); // Hide dropdown for barbers
+              }
+
+              return Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Consumer<SalonProvider>(
+                  builder: (context, salonProvider, child) {
+                    if (salonProvider.isLoading) return LinearProgressIndicator();
+                    
+                    return DropdownButtonFormField<Salon>(
+                      value: _selectedSalon,
+                      decoration: InputDecoration(
+                        labelText: 'Odaberite salon za pregled',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.store),
+                      ),
+                      items: salonProvider.salons.map((salon) {
+                        return DropdownMenuItem(
+                          value: salon,
+                          child: Text(salon.name),
+                        );
+                      }).toList(),
+                      onChanged: (Salon? newValue) {
+                        setState(() {
+                          _selectedSalon = newValue;
+                        });
+                        if (newValue != null) {
+                          context.read<BarberProvider>().loadBarbers(newValue.id);
+                          context.read<ServiceProvider>().loadServices(newValue.id);
+                        }
+                      },
+                    );
+                  },
+                ),
+              );
+            }
           ),
           
           // List Section
@@ -82,7 +114,7 @@ class _BarbersScreenState extends State<BarbersScreen> {
                       children: [
                         Icon(Icons.person_search, size: 64, color: Colors.grey[300]),
                         SizedBox(height: 16),
-                        Text('Molimo odaberite salon iznad.',
+                        Text('Učitavam podatke ili odaberite salon iznad.',
                             style: TextStyle(color: Colors.grey[500], fontSize: 16)),
                       ],
                     ),
@@ -340,6 +372,11 @@ class _BarbersScreenState extends State<BarbersScreen> {
                       SizedBox(height: 16),
                        Consumer<SalonProvider>(
                         builder: (context, salonProvider, _) {
+                          final authProvider = context.read<AuthProvider>();
+                          if (authProvider.isBarber) {
+                            return SizedBox.shrink(); // Hide dropdown for barbers
+                          }
+                          
                           return DropdownButtonFormField<Salon>(
                             value: _dialogSelectedSalon,
                             decoration: InputDecoration(labelText: 'Salon'),

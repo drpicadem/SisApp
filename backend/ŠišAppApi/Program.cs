@@ -19,7 +19,11 @@ using System.Reflection;
 var builder = WebApplication.CreateBuilder(args);
 
 // Dodavanje servisa
-builder.Services.AddControllers()
+builder.Services.AddScoped<ŠišAppApi.Filters.ExceptionFilter>();
+builder.Services.AddControllers(x =>
+    {
+        x.Filters.AddService<ŠišAppApi.Filters.ExceptionFilter>();
+    })
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
@@ -59,6 +63,7 @@ builder.Services.AddScoped<ISmsService, SmsService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IImageService, ImageService>();
+builder.Services.AddScoped<RecommendationService>();
 
 // Konfiguracija MassTransit-a (RabbitMQ)
 builder.Services.AddMassTransit(x =>
@@ -68,9 +73,11 @@ builder.Services.AddMassTransit(x =>
     x.UsingRabbitMq((context, cfg) =>
     {
         var rabbitHost = builder.Configuration["RabbitMQ:Host"] ?? "localhost";
+        var rabbitUser = builder.Configuration["RabbitMQ:Username"] ?? "guest";
+        var rabbitPass = builder.Configuration["RabbitMQ:Password"] ?? "guest";
         cfg.Host(rabbitHost, "/", h => {
-            h.Username("guest");
-            h.Password("guest");
+            h.Username(rabbitUser);
+            h.Password(rabbitPass);
         });
         cfg.ConfigureEndpoints(context);
     });

@@ -13,7 +13,7 @@ import '../models/working_hours.dart';
 import 'package:intl/intl.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:7100/api';
+  static const String baseUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:7100/api');
   
   // Auth methods...
   Future<TokenResponse?> login(LoginRequest request) async {
@@ -146,6 +146,26 @@ class ApiService {
     }
   }
 
+  Future<Barber?> getMyBarberProfile(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/Barbers/my-profile'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return Barber.fromJson(jsonDecode(response.body));
+      }
+      return null;
+    } catch (e) {
+      print('Get My Barber Profile error: $e');
+      return null;
+    }
+  }
+
   Future<int?> createBarber(CreateBarberDto dto, String token) async {
     try {
       final response = await http.post(
@@ -190,6 +210,26 @@ class ApiService {
     }
   }
 
+  Future<Salon?> getSalonById(int salonId, String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/Salons/$salonId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return Salon.fromJson(jsonDecode(response.body));
+      }
+      return null;
+    } catch (e) {
+      print('Get Salon By Id error: $e');
+      return null;
+    }
+  }
+
   Future<int?> createSalon(Salon salon, String token) async {
     try {
       final response = await http.post(
@@ -208,6 +248,26 @@ class ApiService {
     } catch (e) {
       print('Create Salon error: $e');
       return null;
+    }
+  }
+
+  Future<bool> updateSalon(Salon salon, String token) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/Salons/${salon.id}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(salon.toJson()),
+      );
+      print('Update Salon Status: ${response.statusCode}');
+      print('Update Salon Body: ${response.body}');
+      
+      return response.statusCode == 200 || response.statusCode == 204;
+    } catch (e) {
+      print('Update Salon error: $e');
+      return false;
     }
   }
 
@@ -376,11 +436,13 @@ class ApiService {
     }
   }
 
-  Future<List<String>> getAvailableSlots(int barberId, DateTime date, String token) async {
+  Future<List<String>> getAvailableSlots(int barberId, DateTime date, String token, {int? serviceId}) async {
     try {
       final dateStr = DateFormat('yyyy-MM-dd').format(date);
+      var url = '$baseUrl/Appointments/available-slots?barberId=$barberId&date=$dateStr';
+      if (serviceId != null) url += '&serviceId=$serviceId';
       final response = await http.get(
-        Uri.parse('$baseUrl/Appointments/available-slots?barberId=$barberId&date=$dateStr'),
+        Uri.parse(url),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -427,7 +489,8 @@ class ApiService {
     int? customerId,
     String customerEmail,
     String successUrl, 
-    String cancelUrl
+    String cancelUrl,
+    String paymentMethod
   ) async {
     try {
       final response = await http.post(
@@ -444,7 +507,8 @@ class ApiService {
           'cancelUrl': cancelUrl,
           'customerEmail': customerEmail,
           'appointmentId': appointmentId,
-          'customerId': customerId
+          'customerId': customerId,
+          'paymentMethod': paymentMethod
         }),
       );
 
@@ -808,6 +872,68 @@ class ApiService {
       return response.statusCode == 204 || response.statusCode == 200;
     } catch (e) {
       print('Update Service error: $e');
+      return false;
+    }
+  }
+
+  // Recommendations
+  Future<List<Map<String, dynamic>>> getRecommendations(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/Recommendations'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (e) {
+      print('Get Recommendations error: $e');
+      return [];
+    }
+  }
+
+  // ============ Favorites ============
+
+  Future<List<int>> getFavoriteSalons(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/Favorites/salons'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.cast<int>();
+      }
+      return [];
+    } catch (e) {
+      print('Get Favorite Salons error: $e');
+      return [];
+    }
+  }
+
+  Future<bool> toggleFavoriteSalon(int salonId, String token) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/Favorites/toggle/$salonId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Toggle Favorite Salon error: $e');
       return false;
     }
   }
