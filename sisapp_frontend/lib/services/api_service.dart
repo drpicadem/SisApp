@@ -13,8 +13,21 @@ import '../models/review.dart';
 import '../models/working_hours.dart';
 import 'package:intl/intl.dart';
 
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 class ApiService {
-  static const String baseUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:7100/api');
+  static String get _defaultUrl {
+    if (kIsWeb) {
+      return 'http://127.0.0.1:7100/api';
+    }
+    if (Platform.isAndroid) {
+      return 'http://10.0.2.2:7100/api';
+    }
+    return 'http://127.0.0.1:7100/api';
+  }
+
+  static final String baseUrl = String.fromEnvironment('API_URL', defaultValue: _defaultUrl);
   
   // Auth methods...
   Future<TokenResponse?> login(LoginRequest request) async {
