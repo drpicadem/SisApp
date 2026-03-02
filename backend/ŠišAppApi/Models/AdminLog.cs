@@ -12,7 +12,7 @@ public class AdminLog
     public int AdminId { get; set; }
     
     [ForeignKey("AdminId")]
-    public User Admin { get; set; } = null!;
+    public Admin Admin { get; set; } = null!;
     
     [Required]
     [MaxLength(50)]

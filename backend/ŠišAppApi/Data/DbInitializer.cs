@@ -37,6 +37,7 @@ namespace ŠišAppApi.Data
                 // Use EnsureCreated to match DB to current Code Model (bypassing old migrations)
                 context.Database.Migrate();
 
+                // 1. Ensure "Glavni Salon" exists
                 if (!context.Salons.Any())
                 {
                     var salon = new Salon
@@ -50,13 +51,14 @@ namespace ŠišAppApi.Data
                         Email = "info@sisapp.com",
                         Rating = 5.0,
                         IsActive = true,
+                        IsVerified = false,
                         CreatedAt = DateTime.UtcNow
                     };
                     context.Salons.Add(salon);
                     context.SaveChanges();
                 }
 
-                // Ensure "desktop" user exists
+                // 2. Ensure "desktop" admin user exists
                 if (!context.Users.Any(u => u.Username == "desktop"))
                 {
                      var passwordHash = BCrypt.Net.BCrypt.HashPassword("test");
@@ -70,7 +72,8 @@ namespace ŠišAppApi.Data
                          Role = "Admin",
                          IsActive = true,
                          CreatedAt = DateTime.UtcNow, 
-                         IsEmailVerified = true
+                         IsEmailVerified = true,
+                         IsPhoneVerified = false
                      };
                      context.Users.Add(adminUser);
                      context.SaveChanges();
@@ -86,7 +89,7 @@ namespace ŠišAppApi.Data
                      context.SaveChanges();
                 }
 
-                // Ensure "mobile" user exists or update email
+                // 3. Ensure "mobile" customer user exists
                 var mobileUser = context.Users.FirstOrDefault(u => u.Username == "mobile");
                 if (mobileUser == null)
                 {
@@ -101,7 +104,8 @@ namespace ŠišAppApi.Data
                          Role = "User",
                          IsActive = true,
                          CreatedAt = DateTime.UtcNow,
-                         IsEmailVerified = true
+                         IsEmailVerified = true,
+                         IsPhoneVerified = false
                      };
                      context.Users.Add(mobileUser);
                      context.SaveChanges();
@@ -116,7 +120,6 @@ namespace ŠišAppApi.Data
                 }
                 else
                 {
-                    // Update email if it changed
                     if (mobileUser.Email != "ademtolja123@gmail.com")
                     {
                         mobileUser.Email = "ademtolja123@gmail.com";
@@ -125,7 +128,7 @@ namespace ŠišAppApi.Data
                     }
                 }
 
-                // Ensure "barber" user exists
+                // 4. Ensure "barber" user exists
                 if (!context.Users.Any(u => u.Username == "barber"))
                 {
                      var passwordHash = BCrypt.Net.BCrypt.HashPassword("test");
@@ -139,7 +142,8 @@ namespace ŠišAppApi.Data
                          Role = "Barber",
                          IsActive = true,
                          CreatedAt = DateTime.UtcNow,
-                         IsEmailVerified = true
+                         IsEmailVerified = true,
+                         IsPhoneVerified = false
                      };
                      context.Users.Add(barberUser);
                      context.SaveChanges();
@@ -151,7 +155,12 @@ namespace ŠišAppApi.Data
                         {
                                 UserId = barberUser.Id,
                                 SalonId = salon.Id,
-                                Bio = "Expert Barber",
+                                Bio = "Iskusni frizer",
+                                Rating = 5.0,
+                                ReviewCount = 0,
+                                AppointmentCount = 0,
+                                IsAvailable = true,
+                                IsVerified = true,
                                 CreatedAt = DateTime.UtcNow
                         };
                         context.Barbers.Add(barberProfile);
@@ -159,27 +168,64 @@ namespace ŠišAppApi.Data
                      }
                 }
 
-                // Separate check for WorkingHours to ensure they are added even if users exist
+                // 5. Ensure WorkingHours exist
                 if (!context.WorkingHours.Any())
                 {
                     var barber = context.Barbers.FirstOrDefault();
                     if (barber != null)
                     {
-                        var workingHoursList = new List<WorkingHours>();
-                        for (int i = 1; i <= 5; i++)
+                        var workingHoursList = new List<WorkingHours>
                         {
-                            workingHoursList.Add(new WorkingHours
-                            {
-                                BarberId = barber.Id,
-                                DayOfWeek = i,
-                                StartTime = new TimeSpan(9, 0, 0),
-                                EndTime = new TimeSpan(17, 0, 0),
-                                IsWorking = true,
-                                CreatedAt = DateTime.UtcNow
-                            });
-                        }
+                            new WorkingHours { BarberId = barber.Id, DayOfWeek = 1, StartTime = new TimeSpan(9, 0, 0), EndTime = new TimeSpan(17, 0, 0), IsWorking = true, IsDefault = false, CreatedAt = DateTime.UtcNow },
+                            new WorkingHours { BarberId = barber.Id, DayOfWeek = 2, StartTime = new TimeSpan(9, 0, 0), EndTime = new TimeSpan(17, 0, 0), IsWorking = true, IsDefault = false, CreatedAt = DateTime.UtcNow },
+                            new WorkingHours { BarberId = barber.Id, DayOfWeek = 3, StartTime = new TimeSpan(9, 0, 0), EndTime = new TimeSpan(17, 0, 0), IsWorking = true, IsDefault = false, CreatedAt = DateTime.UtcNow },
+                            new WorkingHours { BarberId = barber.Id, DayOfWeek = 4, StartTime = new TimeSpan(9, 0, 0), EndTime = new TimeSpan(17, 0, 0), IsWorking = true, IsDefault = false, CreatedAt = DateTime.UtcNow },
+                            new WorkingHours { BarberId = barber.Id, DayOfWeek = 5, StartTime = new TimeSpan(9, 0, 0), EndTime = new TimeSpan(17, 0, 0), IsWorking = true, IsDefault = false, CreatedAt = DateTime.UtcNow },
+                            new WorkingHours { BarberId = barber.Id, DayOfWeek = 6, StartTime = new TimeSpan(9, 0, 0), EndTime = new TimeSpan(14, 0, 0), IsWorking = true, IsDefault = false, CreatedAt = DateTime.UtcNow },
+                            new WorkingHours { BarberId = barber.Id, DayOfWeek = 0, StartTime = new TimeSpan(0, 0, 0), EndTime = new TimeSpan(0, 0, 0), IsWorking = false, IsDefault = false, CreatedAt = DateTime.UtcNow }
+                        };
                         context.WorkingHours.AddRange(workingHoursList);
                         context.SaveChanges();
+                    }
+                }
+
+                // 6. Ensure Services exist
+                if (!context.Services.Any())
+                {
+                    var salon = context.Salons.FirstOrDefault();
+                    if (salon != null)
+                    {
+                        var servicesList = new List<Service>
+                        {
+                            new Service { SalonId = salon.Id, Name = "Muško šišanje", Description = "Klasično muško šišanje mašinicom i makazama.", DurationMinutes = 30, Price = 15.00m, IsPopular = false, DisplayOrder = 0, IsActive = true, CreatedAt = DateTime.UtcNow },
+                            new Service { SalonId = salon.Id, Name = "Uređivanje brade", Description = "Oblikovanje i trimanje brade sa prelivima.", DurationMinutes = 20, Price = 10.00m, IsPopular = false, DisplayOrder = 0, IsActive = true, CreatedAt = DateTime.UtcNow },
+                            new Service { SalonId = salon.Id, Name = "Dječije šišanje", Description = "Šišanje za dječake prilagođeno uzrastu.", DurationMinutes = 30, Price = 12.00m, IsPopular = false, DisplayOrder = 0, IsActive = true, CreatedAt = DateTime.UtcNow },
+                            new Service { SalonId = salon.Id, Name = "Pranje kose", Description = "Opuštajuće pranje i sušenje kose uz masažu glave.", DurationMinutes = 10, Price = 5.00m, IsPopular = false, DisplayOrder = 0, IsActive = true, CreatedAt = DateTime.UtcNow }
+                        };
+                        context.Services.AddRange(servicesList);
+                        context.SaveChanges();
+                    }
+                }
+
+                // 7. Ensure BarberSpecialties exist
+                if (!context.BarberSpecialties.Any())
+                {
+                    var barber = context.Barbers.FirstOrDefault();
+                    if (barber != null && context.Services.Any())
+                    {
+                        var services = context.Services.Take(4).ToList();
+                        if (services.Count == 4) 
+                        {
+                            var specialties = new List<BarberSpecialty>
+                            {
+                                new BarberSpecialty { BarberId = barber.Id, ServiceId = services[0].Id, ExpertiseLevel = 5, IsPrimary = true, CreatedAt = DateTime.UtcNow },
+                                new BarberSpecialty { BarberId = barber.Id, ServiceId = services[1].Id, ExpertiseLevel = 4, IsPrimary = false, CreatedAt = DateTime.UtcNow },
+                                new BarberSpecialty { BarberId = barber.Id, ServiceId = services[2].Id, ExpertiseLevel = 4, IsPrimary = false, CreatedAt = DateTime.UtcNow },
+                                new BarberSpecialty { BarberId = barber.Id, ServiceId = services[3].Id, ExpertiseLevel = 3, IsPrimary = false, CreatedAt = DateTime.UtcNow }
+                            };
+                            context.BarberSpecialties.AddRange(specialties);
+                            context.SaveChanges();
+                        }
                     }
                 }
             }

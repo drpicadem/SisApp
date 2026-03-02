@@ -43,6 +43,8 @@ dependencies:
   http_parser: ^4.0.2
   file_selector_windows: ^0.9.3+4
   geolocator: ^14.0.2
+  printing: ^5.11.1
+  pdf: ^3.10.8
 
 dev_dependencies:
   flutter_test:

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import '../models/login_request.dart';
 import '../models/token_response.dart';
@@ -397,6 +398,25 @@ class ApiService {
       return null;
     } catch (e) {
       print('Get Reports error: $e');
+      return null;
+    }
+  }
+
+  Future<Uint8List?> getReportsPdf(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/Reports/stats/pdf'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return response.bodyBytes;
+      }
+      return null;
+    } catch (e) {
+      print('Get Reports PDF error: $e');
       return null;
     }
   }

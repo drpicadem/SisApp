@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
 import '../services/api_service.dart';
 import '../providers/auth_provider.dart';
 
@@ -35,7 +37,38 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Izvještaji i Statistika')),
+      appBar: AppBar(
+        title: Text('Izvještaji i Statistika'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.print),
+            tooltip: 'Preuzmi / Isprintaj PDF',
+            onPressed: _isLoading ? null : () async {
+              final token = context.read<AuthProvider>().tokenResponse?.token;
+              if (token != null) {
+                try {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Generišem PDF...')),
+                  );
+                  final pdfBytes = await ApiService().getReportsPdf(token);
+                  if (pdfBytes != null) {
+                    await Printing.layoutPdf(
+                        onLayout: (PdfPageFormat format) async => pdfBytes);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Greška pri dohvaćanju PDF-a.')),
+                    );
+                  }
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Došlo je do greške.')),
+                  );
+                }
+              }
+            },
+          )
+        ],
+      ),
       body: _isLoading 
           ? Center(child: CircularProgressIndicator())
           : _stats == null 

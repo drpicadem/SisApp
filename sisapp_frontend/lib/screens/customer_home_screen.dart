@@ -49,12 +49,23 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       return;
     } 
 
-    final position = await Geolocator.getCurrentPosition();
-    if (mounted) {
-      setState(() {
-        _currentPosition = position;
-        _useLocation = true;
-      });
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low,
+        timeLimit: Duration(seconds: 15),
+      );
+      if (mounted) {
+        setState(() {
+          _currentPosition = position;
+          _useLocation = true;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Greška pri dohvatanju lokacije (Emulator crash). Prvo podesite lokaciju u postavkama emulatora.')),
+        );
+      }
     }
   }
 
