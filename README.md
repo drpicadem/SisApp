@@ -97,5 +97,5 @@ When creating new users, the password must meet the following requirements:
 |-----------|-------------|
 | Backend | ASP.NET Core, SQL Server, RabbitMQ, Docker |
 | Frontend | Flutter (Mobile & Desktop) |
-| Integrations | Stripe (payments), PayPal (payments), Google Maps |
+| Integrations | Stripe (payments), PayPal (payments) |
 | Recommender | Content-based filtering recommendation system |
