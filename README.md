@@ -64,7 +64,7 @@ The core functionality follows this flow:
 
 | Platform | Role | Username | Password |
 |----------|------|----------|----------|
-| Desktop | Admin | `admin` | `test` |
+| Desktop | Admin | `desktop` | `test` |
 | Mobile | Barber | `barber` | `test` |
 | Mobile | mobile | `mobile` | `test` |
 
