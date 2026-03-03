@@ -9,7 +9,7 @@ Seminar paper for the course **Software Development II (Razvoj softvera II)**
 
 ### Backend Setup
 1. Extract `fit-build-2026-03-03-env`
-2. Place the `.env` file into the project root directory (`\RS2-main`)
+2. Place the `.env` file into the project root directory 
 3. Open the project root directory in terminal and run:
    ```bash
    docker compose up --build
@@ -97,5 +97,5 @@ When creating new users, the password must meet the following requirements:
 |-----------|-------------|
 | Backend | ASP.NET Core, SQL Server, RabbitMQ, Docker |
 | Frontend | Flutter (Mobile & Desktop) |
-| Integrations | Stripe (payments), PayPal (payments), Google Maps |
+| Integrations | Stripe (payments), PayPal (payments) |
 | Recommender | Content-based filtering recommendation system |
