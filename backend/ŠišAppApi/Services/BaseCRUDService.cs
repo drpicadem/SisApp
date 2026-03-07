@@ -15,6 +15,7 @@ namespace ŠišAppApi.Services
         Task<T> GetById(int id);
         Task<T> Insert(TInsert request);
         Task<T> Update(int id, TUpdate request);
+        Task<T> Delete(int id);
     }
 
     public class BaseCRUDService<T, TSearch, TDb, TInsert, TUpdate> : ICRUDService<T, TSearch, TInsert, TUpdate>
@@ -60,6 +61,17 @@ namespace ŠišAppApi.Services
             var entity = await _context.Set<TDb>().FindAsync(id);
             _mapper.Map(request, entity);
             await _context.SaveChangesAsync();
+            return _mapper.Map<T>(entity);
+        }
+
+        public virtual async Task<T> Delete(int id)
+        {
+            var entity = await _context.Set<TDb>().FindAsync(id);
+            if (entity != null)
+            {
+                _context.Set<TDb>().Remove(entity);
+                await _context.SaveChangesAsync();
+            }
             return _mapper.Map<T>(entity);
         }
     }

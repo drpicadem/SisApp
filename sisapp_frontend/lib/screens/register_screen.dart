@@ -150,7 +150,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 keyboardType: TextInputType.emailAddress,
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Unesite email';
-                  if (!value.contains('@')) return 'Neispravan email format';
+                  final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                  if (!emailRegex.hasMatch(value)) return 'Neispravan email format';
                   return null;
                 },
               ),

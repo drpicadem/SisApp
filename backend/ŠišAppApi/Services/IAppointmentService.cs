@@ -9,6 +9,6 @@ namespace ŠišAppApi.Services
     {
         Task<IEnumerable<string>> GetAvailableSlots(int barberId, DateOnly date, int? serviceId = null);
         Task<AppointmentDto> Insert(AppointmentInsertRequest request, int userId); 
-        Task<AppointmentDto> Cancel(int id, int userId); 
+        Task<AppointmentDto> Cancel(int id, int userId, string userRole); 
     }
 }

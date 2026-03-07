@@ -75,32 +75,16 @@ class AppointmentProvider extends ChangeNotifier {
   Future<bool> cancelAppointment(int id) async {
     if (_authProvider?.tokenResponse == null) return false;
 
-    _isLoading = true;
-    notifyListeners(); 
-
-    try {
-      bool success = await _apiService.cancelAppointment(id, _authProvider!.tokenResponse!.token);
-      
-      if (success) {
-        // Remove from list locally if successful to avoid full refresh, 
-        // OR refresh. 
-        // If we remove locally, we might mess up pagination indices, but for one item it's fine.
-        // Actually, if we cancel, it moves from "Active" to "History".
-        // If we are in "Active" tab, we should remove it.
-        // If we are in "History" tab, we should add it (or refresh).
-        
-        // Simplest strategy: Remove from current list.
-        _appointments.removeWhere((a) => a.id == id);
+    bool success = await _apiService.cancelAppointment(id, _authProvider!.tokenResponse!.token);
+    
+    if (success) {
+      final index = _appointments.indexWhere((a) => a.id == id);
+      if (index != -1) {
+        _appointments[index] = _appointments[index].copyWith(status: 'Cancelled');
       }
-      
-      _isLoading = false;
       notifyListeners();
-      return success;
-    } catch (e) {
-      print('Error cancelling appointment: $e');
-      _isLoading = false;
-      notifyListeners();
-      return false;
     }
+    
+    return success;
   }
 }

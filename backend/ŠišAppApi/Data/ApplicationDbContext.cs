@@ -137,5 +137,7 @@ public class ApplicationDbContext : DbContext
             .WithMany(s => s.BarberSpecialties)
             .HasForeignKey(bs => bs.ServiceId)
             .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<User>().HasQueryFilter(u => !u.IsDeleted);
     }
 } 

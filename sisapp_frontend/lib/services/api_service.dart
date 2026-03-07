@@ -121,21 +121,23 @@ class ApiService {
     }
   }
 
-  Future<bool> createService(Service service, String token) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/Services'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(service.toJson()),
-      );
-      return response.statusCode == 200 || response.statusCode == 201;
-    } catch (e) {
-      print('Create Service error: $e');
-      return false;
+  Future<Service?> createService(Service service, String token) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/Services'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(service.toJson()),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return Service.fromJson(jsonDecode(response.body));
     }
+    if (response.statusCode == 400) {
+      final error = jsonDecode(response.body);
+      throw Exception(error['userError'] ?? 'Greška pri kreiranju usluge');
+    }
+    throw Exception('Greška pri kreiranju usluge');
   }
 
   // Barber methods
@@ -200,6 +202,31 @@ class ApiService {
     } catch (e) {
       print('Create Barber error: $e');
       return null;
+    }
+  }
+
+  Future<Barber?> updateBarber(int id, UpdateBarberDto dto, String token) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/Barbers/$id'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(dto.toJson()),
+      );
+      
+      if (response.statusCode == 200) {
+        return Barber.fromJson(jsonDecode(response.body));
+      } else if (response.statusCode == 400) {
+        final error = jsonDecode(response.body);
+        throw Exception(error['userError'] ?? 'Greška pri ažuriranju uposlenika');
+      } else {
+        throw Exception('Server greška (${response.statusCode})');
+      }
+    } catch (e) {
+      print('Update Barber error: $e');
+      rethrow;
     }
   }
   // Salon methods
@@ -380,18 +407,29 @@ class ApiService {
   }
 
   Future<bool> deleteUser(int userId, String token) async {
-    try {
-      final response = await http.delete(
-        Uri.parse('$baseUrl/Users/$userId'),
-        headers: {
-           'Authorization': 'Bearer $token',
-        },
-      );
-      return response.statusCode == 204 || response.statusCode == 200;
-    } catch (e) {
-      print('Delete User error: $e');
-      return false;
+    final response = await http.delete(
+      Uri.parse('$baseUrl/Users/$userId'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode == 200 || response.statusCode == 204) return true;
+    if (response.statusCode == 400) {
+      final error = jsonDecode(response.body);
+      throw Exception(error['userError'] ?? 'Greška pri brisanju korisnika');
     }
+    throw Exception('Greška pri brisanju korisnika');
+  }
+
+  Future<bool> restoreUser(int userId, String token) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/Users/$userId/restore'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode == 200) return true;
+    if (response.statusCode == 400) {
+      final error = jsonDecode(response.body);
+      throw Exception(error['userError'] ?? 'Greška pri vraćanju korisnika');
+    }
+    throw Exception('Greška pri vraćanju korisnika');
   }
 
   // Report methods
@@ -514,6 +552,60 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>?> createPaymentIntent(
+    String token,
+    int appointmentId,
+    String serviceName,
+    double amount,
+    int? customerId,
+    String customerEmail,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/Payment/create-payment-intent'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'amount': (amount * 100).toInt(),
+          'serviceName': serviceName,
+          'customerEmail': customerEmail,
+          'appointmentId': appointmentId,
+          'customerId': customerId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<String?> confirmPayment(int appointmentId, String token) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/Payment/confirm-payment'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'appointmentId': appointmentId}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['status'];
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<String?> createCheckoutSession(
     String token, 
     int appointmentId, 
@@ -533,7 +625,7 @@ class ApiService {
           'Authorization': 'Bearer $token',
         },
         body: jsonEncode({
-          'amount': (amount * 100).toInt(), // Convert to cents
+          'amount': (amount * 100).toInt(),
           'serviceName': serviceName,
           'serviceDescription': 'Rezervacija termina',
           'successUrl': successUrl,
@@ -548,12 +640,9 @@ class ApiService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['url'];
-      } else {
-        print('Create checkout session failed: ${response.body}');
-        return null;
       }
+      return null;
     } catch (e) {
-      print('Create checkout session error: $e');
       return null;
     }
   }
@@ -579,18 +668,17 @@ class ApiService {
   }
 
   Future<bool> cancelAppointment(int id, String token) async {
-    try {
-      final response = await http.put(
-        Uri.parse('$baseUrl/Appointments/$id/cancel'),
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
-      );
-      return response.statusCode == 200;
-    } catch (e) {
-      print('Cancel Appointment error: $e');
-      return false;
+    final response = await http.put(
+      Uri.parse('$baseUrl/Appointments/$id/cancel'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode == 200) return true;
+    if (response.statusCode == 400) {
+      final body = jsonDecode(response.body);
+      final msg = body is Map ? (body['userError'] ?? body.toString()) : body.toString();
+      throw Exception(msg);
     }
+    throw Exception('Greška pri otkazivanju termina');
   }
 
   // ============ Reviews ============
@@ -878,35 +966,35 @@ class ApiService {
   // ============ Service Management ============
 
   Future<bool> deleteService(int serviceId, String token) async {
-    try {
-      final response = await http.delete(
-        Uri.parse('$baseUrl/Services/$serviceId'),
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
-      );
-      return response.statusCode == 204 || response.statusCode == 200;
-    } catch (e) {
-      print('Delete Service error: $e');
-      return false;
+    final response = await http.delete(
+      Uri.parse('$baseUrl/Services/$serviceId'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode == 200 || response.statusCode == 204) return true;
+    if (response.statusCode == 400) {
+      final error = jsonDecode(response.body);
+      throw Exception(error['userError'] ?? 'Greška pri brisanju usluge');
     }
+    throw Exception('Greška pri brisanju usluge');
   }
 
-  Future<bool> updateService(Service service, String token) async {
-    try {
-      final response = await http.put(
-        Uri.parse('$baseUrl/Services/${service.id}'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(service.toJson()),
-      );
-      return response.statusCode == 204 || response.statusCode == 200;
-    } catch (e) {
-      print('Update Service error: $e');
-      return false;
+  Future<Service?> updateService(Service service, String token) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/Services/${service.id}'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(service.toJson()),
+    );
+    if (response.statusCode == 200) {
+      return Service.fromJson(jsonDecode(response.body));
     }
+    if (response.statusCode == 400) {
+      final error = jsonDecode(response.body);
+      throw Exception(error['userError'] ?? 'Greška pri ažuriranju usluge');
+    }
+    throw Exception('Greška pri ažuriranju usluge');
   }
 
   // Recommendations

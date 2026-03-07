@@ -56,15 +56,8 @@ namespace ŠišAppApi.Controllers
         [HttpPut("{id}/cancel")]
         public async Task<ActionResult<AppointmentDto>> Cancel(int id)
         {
-            try
-            {
-                var result = await _appointmentService.Cancel(id, GetUserId());
-                return Ok(result);
-            }
-            catch (UserException ex)
-            {
-                return BadRequest(ex.Message);
-            }
+            var result = await _appointmentService.Cancel(id, GetUserId(), GetUserRole());
+            return Ok(result);
         }
     }
 }

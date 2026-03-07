@@ -22,16 +22,18 @@ public class RecommendationService
             .Where(a => a.UserId == userId && !a.IsDeleted && a.Status != "Cancelled")
             .ToListAsync();
 
-        var userReviews = await _context.Reviews
+        var userReviewsQuery = await _context.Reviews
+            .Include(r => r.Appointment)
             .Where(r => r.UserId == userId && !r.IsDeleted)
-            .ToDictionaryAsync(r => r.AppointmentId, r => r.Rating);
-        
+            .ToListAsync();
+
         if (!userAppointments.Any())
         {
             return await GetPopularRecommendations(maxResults);
         }
 
-        var profile = BuildUserProfile(userAppointments, userReviews);
+        var profile = BuildUserProfile(userAppointments);
+        var reviewMetricsPerSalon = CalculateSalonReviewMetrics(userReviewsQuery);
 
         var usedServiceIds = userAppointments.Select(a => a.ServiceId).Distinct().ToHashSet();
 
@@ -46,7 +48,7 @@ public class RecommendationService
 
         foreach (var service in candidateServices)
         {
-            var (score, reason) = ScoreService(service, profile);
+            var (score, reason) = ScoreService(service, profile, reviewMetricsPerSalon);
             if (score > 0)
             {
                 scored.Add((service, score, reason));
@@ -77,8 +79,56 @@ public class RecommendationService
         }).ToList();
     }
 
+    private Dictionary<int, SalonReviewMetrics> CalculateSalonReviewMetrics(List<Review> reviews)
+    {
+        var metrics = new Dictionary<int, SalonReviewMetrics>();
+        var grouped = reviews.Where(r => r.Appointment != null).GroupBy(r => r.Appointment!.SalonId);
 
-    private UserProfile BuildUserProfile(List<Appointment> appointments, Dictionary<int, int> reviews)
+        var now = DateTime.UtcNow;
+
+        foreach (var group in grouped)
+        {
+            var salonReviews = group.OrderBy(r => r.CreatedAt).ToList();
+            
+            float totalWeightedRating = 0;
+            float totalWeights = 0;
+            
+            foreach (var r in salonReviews)
+            {
+                var ageMonths = (now - r.CreatedAt).TotalDays / 30.0;
+                float weight = 1.0f;
+                // Recency bias
+                if (ageMonths > 12) weight = 0.4f;
+                else if (ageMonths > 6) weight = 0.7f;
+                
+                totalWeightedRating += r.Rating * weight;
+                totalWeights += weight;
+            }
+            
+            float weightedAvg = totalWeights > 0 ? totalWeightedRating / totalWeights : 0;
+            
+            bool isTrendingUp = false;
+            bool isTrendingDown = false;
+            if (salonReviews.Count >= 2)
+            {
+                var firstRating = salonReviews.First().Rating;
+                var lastRating = salonReviews.Last().Rating;
+                if (lastRating > firstRating) isTrendingUp = true;
+                if (lastRating < firstRating) isTrendingDown = true;
+            }
+
+            metrics[group.Key] = new SalonReviewMetrics 
+            {
+                WeightedAverageScore = weightedAvg,
+                IsTrendingUp = isTrendingUp,
+                IsTrendingDown = isTrendingDown
+            };
+        }
+
+        return metrics;
+    }
+
+    private UserProfile BuildUserProfile(List<Appointment> appointments)
     {
         var profile = new UserProfile();
 
@@ -107,21 +157,37 @@ public class RecommendationService
 
             profile.SalonVisits.TryAdd(apt.SalonId, 0);
             profile.SalonVisits[apt.SalonId]++;
-
-            if (reviews.TryGetValue(apt.Id, out var rating))
-            {
-                profile.AvgRating += rating;
-                profile.RatingCount++;
-            }
         }
 
         return profile;
     }
 
-    private (float score, string reason) ScoreService(Service service, UserProfile profile)
+    private (float score, string reason) ScoreService(Service service, UserProfile profile, Dictionary<int, SalonReviewMetrics> reviewMetrics)
     {
         float score = 0f;
         var reasons = new List<string>();
+
+       if (reviewMetrics.TryGetValue(service.SalonId, out var metrics))
+        {
+            if (metrics.WeightedAverageScore >= 4.0f)
+            {
+                score += 15f;
+                reasons.Add("Vaš omiljeni salon");
+            }
+            else if (metrics.WeightedAverageScore <= 2.5f)
+            {
+                score -= 20f; 
+            }
+
+            if (metrics.IsTrendingUp)
+            {
+                score += 10f;
+                if (!reasons.Contains("Vaš omiljeni salon"))
+                {
+                    reasons.Add("Rastući kvalitet usluge");
+                }
+            }
+        }
 
         var serviceWords = service.Name.ToLower().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         int keywordHits = 0;
@@ -168,7 +234,6 @@ public class RecommendationService
                 score += 5f;
             }
         }
-
         
         if (profile.DurationCount > 0)
         {
@@ -239,8 +304,6 @@ public class RecommendationService
         await _context.SaveChangesAsync();
     }
 
-
-
     private class UserProfile
     {
         public Dictionary<string, int> ServiceKeywords { get; set; } = new();
@@ -250,7 +313,12 @@ public class RecommendationService
         public int PriceCount { get; set; }
         public int TotalDuration { get; set; }
         public int DurationCount { get; set; }
-        public int AvgRating { get; set; }
-        public int RatingCount { get; set; }
+    }
+
+    private class SalonReviewMetrics
+    {
+        public float WeightedAverageScore { get; set; }
+        public bool IsTrendingUp { get; set; }
+        public bool IsTrendingDown { get; set; }
     }
 }

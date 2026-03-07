@@ -36,35 +36,41 @@ class ServiceProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    bool success = await _apiService.createService(service, _authProvider!.tokenResponse!.token);
-    
-    if (success) {
-      // Reload services to get the new list (or add locally)
-      // For simplicity, we reload if we know the salonId, but service object might not have ID yet.
-      // Better to just reload.
-      await loadServices(service.salonId); 
+    final savedService = await _apiService.createService(service, _authProvider!.tokenResponse!.token);
+
+    if (savedService != null) {
+      _services.add(savedService);
     }
 
     _isLoading = false;
     notifyListeners();
-    return success;
+    return savedService != null;
   }
 
   Future<bool> deleteService(int serviceId, int salonId) async {
     if (_authProvider?.tokenResponse == null) return false;
     bool success = await _apiService.deleteService(serviceId, _authProvider!.tokenResponse!.token);
     if (success) {
-      await loadServices(salonId);
+      _services.removeWhere((s) => s.id == serviceId);
+      notifyListeners();
     }
     return success;
   }
 
   Future<bool> updateService(Service service) async {
     if (_authProvider?.tokenResponse == null) return false;
-    bool success = await _apiService.updateService(service, _authProvider!.tokenResponse!.token);
-    if (success) {
-      await loadServices(service.salonId);
+
+    final updatedService = await _apiService.updateService(service, _authProvider!.tokenResponse!.token);
+
+    if (updatedService != null) {
+      final index = _services.indexWhere((s) => s.id == service.id);
+      if (index != -1) {
+        _services[index] = updatedService;
+      }
+      notifyListeners();
     }
-    return success;
+
+    return updatedService != null;
   }
 }
+

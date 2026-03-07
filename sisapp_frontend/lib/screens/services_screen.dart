@@ -26,7 +26,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
         await barberProvider.loadMyBarberProfile();
         if (barberProvider.myBarberProfile != null) {
           final salonId = barberProvider.myBarberProfile!.salonId;
-          // Create a mock Salon object to satisfy _selectedSalon type requirement
+          
           setState(() {
             _selectedSalon = Salon(
               id: salonId, 
@@ -54,11 +54,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
       ),
       body: Column(
         children: [
-          // Salon selector (Admin only)
           Consumer<AuthProvider>(
             builder: (context, authProvider, _) {
               if (authProvider.isBarber) {
-                return SizedBox.shrink(); // Hide dropdown for barbers
+                return SizedBox.shrink(); 
               }
               
               return Padding(
@@ -95,7 +94,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
             }
           ),
 
-          // Services list
           Expanded(
             child: Consumer<ServiceProvider>(
               builder: (context, provider, child) {
@@ -164,7 +162,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Row(
           children: [
-            // Icon
             Container(
               width: 50,
               height: 50,
@@ -175,7 +172,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
               child: Icon(Icons.content_cut, color: Color(0xFFE0CFA9), size: 28),
             ),
             SizedBox(width: 16),
-            // Info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,7 +197,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 ],
               ),
             ),
-            // Actions
             Column(
               children: [
                 IconButton(
@@ -255,11 +250,19 @@ class _ServicesScreenState extends State<ServicesScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
               Navigator.pop(ctx);
-              final success = await context.read<ServiceProvider>().deleteService(service.id, _selectedSalon!.id);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(success ? 'Usluga obrisana.' : 'Greška pri brisanju.')),
-                );
+              try {
+                final success = await context.read<ServiceProvider>().deleteService(service.id, _selectedSalon!.id);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(success ? 'Usluga obrisana.' : 'Greška pri brisanju.')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                  );
+                }
               }
             },
             child: Text('Obriši'),
@@ -333,15 +336,21 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     durationMinutes: int.parse(durationController.text),
                   );
 
-                  final success = await context.read<ServiceProvider>().addService(service);
-
-                  if (!context.mounted) return;
-
-                  if (success) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Usluga dodana!')));
-                    Navigator.pop(context);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Greška!')));
+                  try {
+                    final success = await context.read<ServiceProvider>().addService(service);
+                    if (!context.mounted) return;
+                    if (success) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Usluga dodana!')));
+                      Navigator.pop(context);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Operacija nije uspjela.')));
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                      );
+                    }
                   }
                 }
               },
@@ -419,15 +428,21 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     isActive: service.isActive,
                   );
 
-                  final success = await context.read<ServiceProvider>().updateService(updated);
-
-                  if (!context.mounted) return;
-
-                  if (success) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Usluga ažurirana!')));
-                    Navigator.pop(context);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Greška!')));
+                  try {
+                    final success = await context.read<ServiceProvider>().updateService(updated);
+                    if (!context.mounted) return;
+                    if (success) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Usluga ažurirana!')));
+                      Navigator.pop(context);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Spremanje nije uspjelo.')));
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                      );
+                    }
                   }
                 }
               },

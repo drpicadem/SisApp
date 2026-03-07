@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'providers/auth_provider.dart';
 import 'providers/service_provider.dart';
 import 'providers/barber_provider.dart';
@@ -25,6 +26,11 @@ import 'screens/appointments_screen.dart';
 import 'screens/barber/edit_salon_screen.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  Stripe.publishableKey = const String.fromEnvironment(
+    'STRIPE_PUBLISHABLE_KEY',
+    defaultValue: 'pk_test_placeholder',
+  );
   runApp(MyApp());
 }
 

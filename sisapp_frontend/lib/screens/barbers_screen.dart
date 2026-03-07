@@ -207,15 +207,29 @@ class _BarbersScreenState extends State<BarbersScreen> {
                 ],
               ),
             ),
-            // Service assignment button
-            Column(
+            Row(
               children: [
-                IconButton(
-                  icon: Icon(Icons.content_cut, color: Color(0xFFE0CFA9)),
-                  tooltip: 'Dodijeli usluge',
-                  onPressed: () => _showServiceAssignmentDialog(context, barber),
+                Column(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.edit, color: Colors.blue),
+                      tooltip: 'Uredi',
+                      onPressed: () => _showEditBarberDialog(context, barber),
+                    ),
+                    Text('Uredi', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                  ],
                 ),
-                Text('Usluge', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                SizedBox(width: 8),
+                Column(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.content_cut, color: Color(0xFFE0CFA9)),
+                      tooltip: 'Dodijeli usluge',
+                      onPressed: () => _showServiceAssignmentDialog(context, barber),
+                    ),
+                    Text('Usluge', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                  ],
+                ),
               ],
             ),
           ],
@@ -413,13 +427,17 @@ class _BarbersScreenState extends State<BarbersScreen> {
                       TextFormField(
                         controller: _emailController,
                         decoration: InputDecoration(labelText: 'Email'),
-                        validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return 'Obavezno';
+                          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v)) return 'Neispravan email format';
+                          return null;
+                        },
                       ),
                       TextFormField(
                         controller: _passwordController,
                         decoration: InputDecoration(labelText: 'Lozinka'),
                         obscureText: true,
-                        validator: (v) => v!.length < 4 ? 'Min 4 znaka' : null,
+                        validator: (v) => v!.length < 6 ? 'Min 6 znakova' : null,
                       ),
                        TextFormField(
                         controller: _bioController,
@@ -473,11 +491,179 @@ class _BarbersScreenState extends State<BarbersScreen> {
                            this.context.read<BarberProvider>().loadBarbers(_selectedSalon!.id);
                          }
                       } else {
-                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Greška!')));
+                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Neuspješno dodavanje uposlenika. Provjerite podatke.')));
                       }
                     }
                   },
                   child: Text('Dodaj'),
+                ),
+              ],
+            );
+          }
+        );
+      },
+    );
+  }
+
+  void _showEditBarberDialog(BuildContext context, Barber barber) {
+    final _firstNameController = TextEditingController(text: barber.firstName);
+    final _lastNameController = TextEditingController(text: barber.lastName);
+    final _usernameController = TextEditingController(text: barber.username);
+    final _emailController = TextEditingController(text: barber.email);
+    final _passwordController = TextEditingController();
+    final _bioController = TextEditingController(text: barber.bio);
+    final _formKey = GlobalKey<FormState>();
+    File? _selectedImage;
+    final _picker = ImagePicker();
+    
+    bool isDirty = false;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            void checkDirty() {
+              final dirty = _firstNameController.text != barber.firstName ||
+                  _lastNameController.text != barber.lastName ||
+                  _usernameController.text != barber.username ||
+                  _emailController.text != barber.email ||
+                  _passwordController.text.isNotEmpty ||
+                  _bioController.text != barber.bio ||
+                  _selectedImage != null;
+              if (dirty != isDirty) {
+                setDialogState(() {
+                  isDirty = dirty;
+                });
+              }
+            }
+
+            return AlertDialog(
+              title: Text('Uredi Uposlenika'),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: _formKey,
+                  onChanged: checkDirty,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () async {
+                          final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
+                          if (pickedFile != null) {
+                            setDialogState(() {
+                              _selectedImage = File(pickedFile.path);
+                              checkDirty();
+                            });
+                          }
+                        },
+                        child: CircleAvatar(
+                          radius: 50,
+                          backgroundColor: Colors.grey[300],
+                          backgroundImage: _selectedImage != null ? FileImage(_selectedImage!) : null,
+                          child: _selectedImage == null
+                              ? EntityImage(
+                                  entityType: 'Barber',
+                                  entityId: barber.id,
+                                  token: context.read<AuthProvider>().tokenResponse?.token ?? '',
+                                  isCircular: true,
+                                  circularRadius: 50,
+                                  placeholderIcon: Icons.add_a_photo,
+                                  placeholderIconSize: 28,
+                                )
+                              : null,
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                      TextFormField(
+                        controller: _firstNameController,
+                        decoration: InputDecoration(labelText: 'Ime'),
+                        validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                      ),
+                      TextFormField(
+                        controller: _lastNameController,
+                        decoration: InputDecoration(labelText: 'Prezime'),
+                        validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                      ),
+                      TextFormField(
+                        controller: _usernameController,
+                        decoration: InputDecoration(labelText: 'Korisničko ime'),
+                        validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                      ),
+                      TextFormField(
+                        controller: _emailController,
+                        decoration: InputDecoration(labelText: 'Email'),
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return 'Obavezno';
+                          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v)) return 'Neispravan email format';
+                          return null;
+                        },
+                      ),
+                      TextFormField(
+                        controller: _passwordController,
+                        decoration: InputDecoration(labelText: 'Nova lozinka (opcionalno)'),
+                        obscureText: true,
+                        validator: (v) => v!.isNotEmpty && v.length < 6 ? 'Min 6 znakova' : null,
+                      ),
+                      TextFormField(
+                        controller: _bioController,
+                        decoration: InputDecoration(labelText: 'Kratka biografija'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Odustani'),
+                ),
+                ElevatedButton(
+                  onPressed: isDirty ? () async {
+                    if (_formKey.currentState!.validate()) {
+                      final dto = UpdateBarberDto(
+                        firstName: _firstNameController.text,
+                        lastName: _lastNameController.text,
+                        username: _usernameController.text,
+                        email: _emailController.text,
+                        password: _passwordController.text.isEmpty ? null : _passwordController.text,
+                        bio: _bioController.text.isEmpty ? null : _bioController.text,
+                      );
+
+                      try {
+                        final success = await context.read<BarberProvider>().updateBarber(barber.id, dto);
+                        
+                        if (!context.mounted) return;
+
+                        if (success) {
+                          if (_selectedImage != null) {
+                            final token = context.read<AuthProvider>().tokenResponse?.token;
+                            if (token != null) {
+                              await ImageService.uploadImage(
+                                _selectedImage!,
+                                token,
+                                imageType: 'barber',
+                                entityId: barber.id,
+                                entityType: 'Barber',
+                              );
+                              if (_selectedSalon != null) {
+                                this.context.read<BarberProvider>().loadBarbers(_selectedSalon!.id);
+                              }
+                            }
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Uposlenik uspješno ažuriran!')));
+                          Navigator.pop(context);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Neuspješno ažuriranje uposlenika.')));
+                        }
+                      } catch (e) {
+                         ScaffoldMessenger.of(context).showSnackBar(
+                           SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))
+                         );
+                      }
+                    }
+                  } : null,
+                  child: Text('Spremi'),
                 ),
               ],
             );

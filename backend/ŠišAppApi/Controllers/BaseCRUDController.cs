@@ -49,6 +49,17 @@ namespace ŠišAppApi.Controllers
             var result = await _service.Update(id, request);
             return Ok(result);
         }
+
+        [HttpDelete("{id}")]
+        public virtual async Task<ActionResult<T>> Delete(int id)
+        {
+            var result = await _service.Delete(id);
+            if (result == null)
+            {
+                 return NotFound();
+            }
+            return Ok(result);
+        }
         protected int GetUserId()
         {
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);

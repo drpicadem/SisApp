@@ -61,7 +61,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   }
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Došlo je do greške.')),
+                    SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
                   );
                 }
               }

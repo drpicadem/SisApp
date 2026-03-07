@@ -142,7 +142,11 @@ class _EditSalonScreenState extends State<EditSalonScreen> {
                         TextFormField(
                           controller: _phoneController,
                           decoration: InputDecoration(labelText: 'Telefon', border: OutlineInputBorder(), prefixIcon: Icon(Icons.phone)),
-                          validator: (v) => v!.isEmpty ? 'Obavezno polje' : null,
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return 'Obavezno polje';
+                            if (!RegExp(r'^\+?[0-9]{6,15}$').hasMatch(v)) return 'Nevažeći format telefona';
+                            return null;
+                          },
                         ),
                         SizedBox(height: 16),
                         TextFormField(

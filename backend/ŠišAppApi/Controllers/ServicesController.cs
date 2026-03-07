@@ -1,112 +1,56 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ŠišAppApi.Data;
-using ŠišAppApi.Models;
-
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using ŠišAppApi.Models.DTOs;
+using ŠišAppApi.Models.Requests;
+using ŠišAppApi.Models.SearchObjects;
+using ŠišAppApi.Services.Interfaces;
 
 namespace ŠišAppApi.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
 [Authorize]
-public class ServicesController : ControllerBase
+public class ServicesController : BaseCRUDController<ServiceDto, ServiceSearchObject, ServiceInsertRequest, ServiceUpdateRequest>
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IServiceService _serviceService;
 
-    public ServicesController(ApplicationDbContext context)
+    public ServicesController(IServiceService serviceService) : base(serviceService)
     {
-        _context = context;
+        _serviceService = serviceService;
     }
 
-    // GET: api/Services
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<Service>>> GetServices()
-    {
-        return await _context.Services.ToListAsync();
-    }
-
-    // GET: api/Services/salon/1
     [HttpGet("salon/{salonId}")]
-    public async Task<ActionResult<IEnumerable<Service>>> GetServicesBySalon(int salonId)
+    public async Task<ActionResult<IEnumerable<ServiceDto>>> GetServicesBySalon(int salonId)
     {
-        return await _context.Services
-            .Where(s => s.SalonId == salonId && !s.IsDeleted)
-            .ToListAsync();
+        var search = new ServiceSearchObject { SalonId = salonId, IsDeleted = false };
+        return Ok(await _serviceService.Get(search));
     }
 
-    // GET: api/Services/5
-    [HttpGet("{id}")]
-    public async Task<ActionResult<Service>> GetService(int id)
-    {
-        var service = await _context.Services.FindAsync(id);
-
-        if (service == null)
-        {
-            return NotFound();
-        }
-
-        return service;
-    }
-
-    // POST: api/Services
     [HttpPost]
-    public async Task<ActionResult<Service>> PostService(Service service)
+    [Authorize(Roles = "Admin,Barber")]
+    public override async Task<ActionResult<ServiceDto>> Insert([FromBody] ServiceInsertRequest request)
     {
-        _context.Services.Add(service);
-        await _context.SaveChangesAsync();
-
-        return CreatedAtAction("GetService", new { id = service.Id }, service);
+        return await base.Insert(request);
     }
 
-    // PUT: api/Services/5
     [HttpPut("{id}")]
-    public async Task<IActionResult> PutService(int id, Service service)
+    [Authorize(Roles = "Admin,Barber")]
+    public override async Task<ActionResult<ServiceDto>> Update(int id, [FromBody] ServiceUpdateRequest request)
     {
-        if (id != service.Id)
-        {
-            return BadRequest();
-        }
-
-        _context.Entry(service).State = EntityState.Modified;
-
-        try
-        {
-            await _context.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            if (!ServiceExists(id))
-            {
-                return NotFound();
-            }
-            else
-            {
-                throw;
-            }
-        }
-
-        return NoContent();
+        return await base.Update(id, request);
     }
 
-    // DELETE: api/Services/5
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteService(int id)
+    [Authorize(Roles = "Admin,Barber")]
+    public override async Task<ActionResult<ServiceDto>> Delete(int id)
     {
-        var service = await _context.Services.FindAsync(id);
-        if (service == null)
+        var userRole = GetUserRole();
+        if (userRole == "Barber")
         {
-            return NotFound();
+            var userId = GetUserId();
+            var result = await _serviceService.DeleteAsBarber(id, userId);
+            return Ok(result);
         }
-
-        _context.Services.Remove(service);
-        await _context.SaveChangesAsync();
-
-        return NoContent();
+        return await base.Delete(id);
     }
-
-    private bool ServiceExists(int id)
-    {
-        return _context.Services.Any(e => e.Id == id);
-    }
-} 
+}

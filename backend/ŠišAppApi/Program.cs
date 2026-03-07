@@ -63,6 +63,9 @@ builder.Services.AddScoped<ISmsService, SmsService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IImageService, ImageService>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<ISalonService, SalonService>();
+builder.Services.AddScoped<IServiceService, ServiceService>();
 builder.Services.AddScoped<RecommendationService>();
 
 // Konfiguracija MassTransit-a (RabbitMQ)

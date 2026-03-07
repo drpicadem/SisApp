@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Platform;
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../models/appointment.dart';
 import '../../providers/booking_provider.dart';
 import '../../providers/payment_provider.dart';
-// import '../../utils/helpers.dart'; // Commenting out as it might not be needed or doesn't exist yet
 
 class ReservationReviewScreen extends StatefulWidget {
   final Appointment appointment;
@@ -29,36 +30,35 @@ class ReservationReviewScreen extends StatefulWidget {
 class _ReservationReviewScreenState extends State<ReservationReviewScreen> {
   bool _isLoading = false;
 
+  bool get _isMobilePlatform {
+    if (kIsWeb) return false;
+    return Platform.isAndroid || Platform.isIOS;
+  }
+
   void _confirmBooking({bool payOnline = false, String? paymentMethod}) async {
     setState(() => _isLoading = true);
-    
+
     final bookingProvider = Provider.of<BookingProvider>(context, listen: false);
     final paymentProvider = Provider.of<PaymentProvider>(context, listen: false);
 
     try {
-      // 1. Create Appointment
       final result = await bookingProvider.createAppointment(widget.appointment);
 
       if (result is Appointment) {
         if (payOnline && paymentMethod != null) {
-          // 2. Initiate Payment
-          await paymentProvider.initiatePayment(
+          final paid = await paymentProvider.initiatePayment(
             result,
             widget.serviceName,
             widget.price,
             paymentMethod,
           );
-          
-          // Poll for status
-          bool paid = await paymentProvider.monitorPaymentStatus(result.id!);
+
           if (paid) {
             _showSuccess("Rezervacija uspješna i plaćena!");
           } else {
-             // Payment might have been cancelled or failed, but appointment exists
-             _showSuccess("Rezervacija kreirana, ali plaćanje nije dovršeno.");
+            _showSuccess("Rezervacija kreirana, ali plaćanje nije dovršeno.");
           }
         } else {
-          // Pay at Salon
           _showSuccess("Rezervacija uspješna! Plaćanje u salonu.");
         }
       } else {
@@ -97,10 +97,10 @@ class _ReservationReviewScreenState extends State<ReservationReviewScreen> {
                 padding: EdgeInsets.symmetric(horizontal: 30, vertical: 12),
               ),
               onPressed: () {
-                Navigator.of(ctx).pop(); // Close dialog
-                Navigator.of(context).popUntil((route) => route.isFirst); // Go to home
+                Navigator.of(ctx).pop();
+                Navigator.pushNamedAndRemoveUntil(context, '/appointments', (route) => route.isFirst);
               },
-              child: Text("Povratak na početnu"),
+              child: Text("Moje rezervacije"),
             ),
           ),
         ],
@@ -136,14 +136,15 @@ class _ReservationReviewScreenState extends State<ReservationReviewScreen> {
                 _confirmBooking(payOnline: true, paymentMethod: 'card');
               },
             ),
-            ListTile(
-              leading: Icon(Icons.paypal, color: Colors.blue[800]),
-              title: Text("PayPal"),
-              onTap: () {
-                Navigator.pop(ctx);
-                _confirmBooking(payOnline: true, paymentMethod: 'paypal');
-              },
-            ),
+            if (!_isMobilePlatform)
+              ListTile(
+                leading: Icon(Icons.paypal, color: Colors.blue[800]),
+                title: Text("PayPal"),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmBooking(payOnline: true, paymentMethod: 'paypal');
+                },
+              ),
           ],
         ),
       ),
@@ -186,7 +187,7 @@ class _ReservationReviewScreenState extends State<ReservationReviewScreen> {
             SizedBox(height: 10),
             ElevatedButton.icon(
               icon: Icon(Icons.credit_card),
-              label: Text("Plati online (Kartica / PayPal)"),
+              label: Text(_isMobilePlatform ? "Plati online (Kartica)" : "Plati online (Kartica / PayPal)"),
               style: ElevatedButton.styleFrom(
                 padding: EdgeInsets.symmetric(vertical: 16),
                 backgroundColor: Colors.blue[800],
@@ -201,7 +202,31 @@ class _ReservationReviewScreenState extends State<ReservationReviewScreen> {
               style: OutlinedButton.styleFrom(
                 padding: EdgeInsets.symmetric(vertical: 16),
               ),
-              onPressed: _isLoading ? null : () => _confirmBooking(payOnline: false),
+              onPressed: _isLoading
+                  ? null
+                  : () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: Text('Potvrda rezervacije'),
+                          content: Text('Da li ste sigurni da želite potvrditi rezervaciju s plaćanjem u salonu?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: Text('Odustani'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                _confirmBooking(payOnline: false);
+                              },
+                              child: Text('Potvrdi'),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
             ),
             if (_isLoading)
               Padding(

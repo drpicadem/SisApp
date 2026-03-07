@@ -37,6 +37,32 @@ class Barber {
       imageIds: json['imageIds'],
     );
   }
+
+  Barber copyWith({
+    int? id,
+    int? userId,
+    int? salonId,
+    String? firstName,
+    String? lastName,
+    String? email,
+    String? username,
+    String? bio,
+    double? rating,
+    String? imageIds,
+  }) {
+    return Barber(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      salonId: salonId ?? this.salonId,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      email: email ?? this.email,
+      username: username ?? this.username,
+      bio: bio ?? this.bio,
+      rating: rating ?? this.rating,
+      imageIds: imageIds ?? this.imageIds,
+    );
+  }
 }
 
 class CreateBarberDto {
@@ -68,5 +94,39 @@ class CreateBarberDto {
       'password': password,
       'bio': bio,
     };
+  }
+}
+
+class UpdateBarberDto {
+  final String firstName;
+  final String lastName;
+  final String username;
+  final String email;
+  final String? password;
+  final String? bio;
+
+  UpdateBarberDto({
+    required this.firstName,
+    required this.lastName,
+    required this.username,
+    required this.email,
+    this.password,
+    this.bio,
+  });
+
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> data = {
+      'firstName': firstName,
+      'lastName': lastName,
+      'username': username,
+      'email': email,
+    };
+    if (password != null && password!.isNotEmpty) {
+      data['password'] = password;
+    }
+    if (bio != null) {
+      data['bio'] = bio;
+    }
+    return data;
   }
 }

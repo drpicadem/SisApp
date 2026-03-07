@@ -38,11 +38,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         _notifications = notifications;
       });
     } catch (e) {
-      print('Error fetching notifications: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+        );
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 

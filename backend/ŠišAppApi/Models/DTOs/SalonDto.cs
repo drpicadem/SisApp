@@ -8,5 +8,14 @@ namespace ŠišAppApi.Models.DTOs
         public string City { get; set; }
         public string? Phone { get; set; }
         public double Rating { get; set; }
+        public string? PostalCode { get; set; }
+        public string? Country { get; set; }
+        public string? Website { get; set; }
+        public string? ImageIds { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public List<string> Services { get; set; } = new List<string>();
+        public int EmployeeCount { get; set; }
+        public bool IsActive { get; set; }
     }
 }

@@ -44,6 +44,7 @@ public class Appointment
     public string PaymentStatus { get; set; } = "Pending"; // Pending, Paid, Failed
 
     public string? StripeSessionId { get; set; }
+    public string? PaymentIntentId { get; set; }
     
     public string? Notes { get; set; }
     

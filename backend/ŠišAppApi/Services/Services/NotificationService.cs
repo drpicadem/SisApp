@@ -44,10 +44,10 @@ namespace ŠišAppApi.Services
             return await query.OrderByDescending(n => n.SentAt).ToListAsync();
         }
 
-        public async Task MarkAsRead(int notificationId)
+        public async Task MarkAsRead(int notificationId, int userId)
         {
             var notification = await _context.Notifications.FindAsync(notificationId);
-            if (notification != null && !notification.IsRead)
+            if (notification != null && !notification.IsRead && notification.UserId == userId)
             {
                 notification.IsRead = true;
                 notification.ReadAt = DateTime.UtcNow;

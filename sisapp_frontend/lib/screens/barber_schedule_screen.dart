@@ -310,7 +310,7 @@ class _BarberScheduleScreenState extends State<BarberScheduleScreen> {
           .deleteWorkingHours(id);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(success ? 'Obrisano!' : 'Greška pri brisanju.'),
+          content: Text(success ? 'Obrisano!' : 'Nije moguće obrisati radno vrijeme.'),
           backgroundColor: success ? Colors.green : Colors.red,
         ),
       );

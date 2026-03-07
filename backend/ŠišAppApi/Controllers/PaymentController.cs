@@ -7,7 +7,7 @@ using System.ComponentModel.DataAnnotations;
 using ŠišAppApi.Data;
 using ŠišAppApi.Models;
 using Microsoft.EntityFrameworkCore;
-using ŠišAppApi.Services; // Added for IEmailService and INotificationService
+using ŠišAppApi.Services;
 using Microsoft.AspNetCore.Authorization;
 
 namespace ŠišAppApi.Controllers;
@@ -30,6 +30,127 @@ public class PaymentController : ControllerBase
         _notificationService = notificationService;
     }
 
+    [HttpPost("create-payment-intent")]
+    public async Task<IActionResult> CreatePaymentIntent([FromBody] PaymentIntentRequest request)
+    {
+        try
+        {
+            var paymentIntentService = new PaymentIntentService();
+            var paymentIntent = await paymentIntentService.CreateAsync(new PaymentIntentCreateOptions
+            {
+                Amount = request.Amount,
+                Currency = "eur",
+                AutomaticPaymentMethods = new PaymentIntentAutomaticPaymentMethodsOptions
+                {
+                    Enabled = true
+                },
+                Metadata = new Dictionary<string, string>
+                {
+                    { "appointmentId", request.AppointmentId?.ToString() ?? "" },
+                    { "customerId", request.CustomerId?.ToString() ?? "" }
+                }
+            });
+
+            if (request.AppointmentId.HasValue)
+            {
+                var appointment = await _context.Appointments.FindAsync(request.AppointmentId.Value);
+                if (appointment != null)
+                {
+                    appointment.PaymentIntentId = paymentIntent.Id;
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            return Ok(new
+            {
+                clientSecret = paymentIntent.ClientSecret,
+                publishableKey = _configuration["Stripe:PublishableKey"]
+            });
+        }
+        catch (StripeException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = $"Greška prilikom kreiranja payment intent-a: {ex.Message}" });
+        }
+    }
+
+    [HttpPost("confirm-payment")]
+    public async Task<IActionResult> ConfirmPayment([FromBody] ConfirmPaymentRequest request)
+    {
+        try
+        {
+            var appointment = await _context.Appointments.FindAsync(request.AppointmentId);
+            if (appointment == null)
+                return NotFound(new { error = "Appointment not found" });
+
+            if (appointment.PaymentStatus == "Paid")
+                return Ok(new { status = "Paid" });
+
+            if (string.IsNullOrEmpty(appointment.PaymentIntentId))
+                return BadRequest(new { error = "No payment intent found for this appointment" });
+
+            var paymentIntentService = new PaymentIntentService();
+            var paymentIntent = await paymentIntentService.GetAsync(appointment.PaymentIntentId);
+
+            if (paymentIntent.Status == "succeeded")
+            {
+                appointment.PaymentStatus = "Paid";
+
+                var existingPayment = await _context.Payments.AnyAsync(p => p.AppointmentId == request.AppointmentId);
+                if (!existingPayment)
+                {
+                    var payment = new Payment
+                    {
+                        AppointmentId = request.AppointmentId,
+                        UserId = appointment.UserId,
+                        Amount = (decimal)(paymentIntent.Amount) / 100m,
+                        Currency = paymentIntent.Currency,
+                        Method = "Stripe",
+                        TransactionId = paymentIntent.Id,
+                        Status = "Completed",
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _context.Payments.Add(payment);
+                }
+
+                await _context.SaveChangesAsync();
+
+                try
+                {
+                    var paymentRecord = await _context.Payments.FirstOrDefaultAsync(p => p.AppointmentId == request.AppointmentId);
+                    await _notificationService.CreateNotification(
+                        appointment.UserId,
+                        $"Uspješno ste platili rezervaciju termina za {appointment.AppointmentDateTime:dd.MM.yyyy HH:mm}.",
+                        "Payment",
+                        paymentRecord?.Id.ToString());
+
+                    var user = await _context.Users.FindAsync(appointment.UserId);
+                    if (user != null && !string.IsNullOrEmpty(user.Email))
+                    {
+                        await _emailService.SendEmailAsync(user.Email, "Potvrda rezervacije - ŠišApp",
+                            $"<h1>Rezervacija potvrđena!</h1><p>Poštovani/a {user.FirstName},</p><p>Vaša rezervacija za termin <strong>{appointment.AppointmentDateTime:dd.MM.yyyy HH:mm}</strong> je uspješno plaćena.</p><p>Hvala na povjerenju!</p>");
+                    }
+                }
+                catch (Exception) { }
+
+                return Ok(new { status = "Paid" });
+            }
+
+            return Ok(new { status = paymentIntent.Status });
+        }
+        catch (StripeException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = $"Greška prilikom potvrde plaćanja: {ex.Message}" });
+        }
+    }
+
     [HttpPost("create-checkout-session")]
     public async Task<IActionResult> CreateCheckoutSession([FromBody] CheckoutSessionRequest request)
     {
@@ -44,7 +165,7 @@ public class PaymentController : ControllerBase
                     {
                         PriceData = new SessionLineItemPriceDataOptions
                         {
-                            UnitAmount = request.Amount, // Cijena u centima
+                            UnitAmount = request.Amount,
                             Currency = "eur",
                             ProductData = new SessionLineItemPriceDataProductDataOptions
                             {
@@ -69,7 +190,6 @@ public class PaymentController : ControllerBase
             var service = new SessionService();
             var session = await service.CreateAsync(options);
 
-            // Save Session ID to Appointment
             if (request.AppointmentId.HasValue)
             {
                 var appointment = await _context.Appointments.FindAsync(request.AppointmentId.Value);
@@ -103,69 +223,86 @@ public class PaymentController : ControllerBase
             return Ok(new { status = "Paid" });
         }
 
-        if (string.IsNullOrEmpty(appointment.StripeSessionId))
+        if (!string.IsNullOrEmpty(appointment.PaymentIntentId))
         {
-             return Ok(new { status = "Pending" });
-        }
-
-        // Verify with Stripe
-        try
-        {
-            var service = new SessionService();
-            var session = await service.GetAsync(appointment.StripeSessionId);
-
-            if (session.PaymentStatus == "paid")
+            try
             {
-                appointment.PaymentStatus = "Paid";
-                
-                // Ensure Payment record exists
-                var existingPayment = await _context.Payments.AnyAsync(p => p.AppointmentId == appointmentId);
-                if (!existingPayment)
+                var piService = new PaymentIntentService();
+                var pi = await piService.GetAsync(appointment.PaymentIntentId);
+                if (pi.Status == "succeeded")
                 {
-                     var payment = new Payment
-                     {
-                         AppointmentId = appointmentId,
-                         UserId = appointment.UserId,
-                         Amount = (decimal)(session.AmountTotal ?? 0) / 100m,
-                         Currency = session.Currency,
-                         Method = "Stripe",
-                         TransactionId = session.PaymentIntentId ?? session.Id,
-                         Status = "Completed",
-                         CreatedAt = DateTime.UtcNow
-                     };
-                     _context.Payments.Add(payment);
-                }
-
-                await _context.SaveChangesAsync();
-
-                // Send Notification and Email
-                try
-                {
-                    var paymentRecord = await _context.Payments.FirstOrDefaultAsync(p => p.AppointmentId == appointmentId);
-                    await _notificationService.CreateNotification(
-                        appointment.UserId,
-                        $"Uspješno ste platili rezervaciju termina za {appointment.AppointmentDateTime:dd.MM.yyyy HH:mm}.",
-                        "Payment",
-                        paymentRecord?.Id.ToString());
-
-                    var user = await _context.Users.FindAsync(appointment.UserId);
-                    if (user != null && !string.IsNullOrEmpty(user.Email))
+                    appointment.PaymentStatus = "Paid";
+                    var existingPayment = await _context.Payments.AnyAsync(p => p.AppointmentId == appointmentId);
+                    if (!existingPayment)
                     {
-                        await _emailService.SendEmailAsync(user.Email, "Potvrda rezervacije - ŠišApp",
-                            $"<h1>Rezervacija potvrđena!</h1><p>Poštovani/a {user.FirstName},</p><p>Vaša rezervacija za termin <strong>{appointment.AppointmentDateTime:dd.MM.yyyy HH:mm}</strong> je uspješno plaćena.</p><p>Hvala na povjerenju!</p>");
+                        _context.Payments.Add(new Payment
+                        {
+                            AppointmentId = appointmentId,
+                            UserId = appointment.UserId,
+                            Amount = (decimal)(pi.Amount) / 100m,
+                            Currency = pi.Currency,
+                            Method = "Stripe",
+                            TransactionId = pi.Id,
+                            Status = "Completed",
+                            CreatedAt = DateTime.UtcNow
+                        });
                     }
+                    await _context.SaveChangesAsync();
+                    return Ok(new { status = "Paid" });
                 }
-                catch (Exception notifEx)
-                {
-                    Console.WriteLine($"Error sending notification/email from check-status: {notifEx.Message}");
-                }
-
-                return Ok(new { status = "Paid" });
             }
+            catch (Exception) { }
         }
-        catch (Exception ex)
+
+        if (!string.IsNullOrEmpty(appointment.StripeSessionId))
         {
-            Console.WriteLine($"Error checking Stripe status: {ex.Message}");
+            try
+            {
+                var service = new SessionService();
+                var session = await service.GetAsync(appointment.StripeSessionId);
+
+                if (session.PaymentStatus == "paid")
+                {
+                    appointment.PaymentStatus = "Paid";
+                    var existingPayment = await _context.Payments.AnyAsync(p => p.AppointmentId == appointmentId);
+                    if (!existingPayment)
+                    {
+                        _context.Payments.Add(new Payment
+                        {
+                            AppointmentId = appointmentId,
+                            UserId = appointment.UserId,
+                            Amount = (decimal)(session.AmountTotal ?? 0) / 100m,
+                            Currency = session.Currency,
+                            Method = "Stripe",
+                            TransactionId = session.PaymentIntentId ?? session.Id,
+                            Status = "Completed",
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                    await _context.SaveChangesAsync();
+
+                    try
+                    {
+                        var paymentRecord = await _context.Payments.FirstOrDefaultAsync(p => p.AppointmentId == appointmentId);
+                        await _notificationService.CreateNotification(
+                            appointment.UserId,
+                            $"Uspješno ste platili rezervaciju termina za {appointment.AppointmentDateTime:dd.MM.yyyy HH:mm}.",
+                            "Payment",
+                            paymentRecord?.Id.ToString());
+
+                        var user = await _context.Users.FindAsync(appointment.UserId);
+                        if (user != null && !string.IsNullOrEmpty(user.Email))
+                        {
+                            await _emailService.SendEmailAsync(user.Email, "Potvrda rezervacije - ŠišApp",
+                                $"<h1>Rezervacija potvrđena!</h1><p>Poštovani/a {user.FirstName},</p><p>Vaša rezervacija za termin <strong>{appointment.AppointmentDateTime:dd.MM.yyyy HH:mm}</strong> je uspješno plaćena.</p><p>Hvala na povjerenju!</p>");
+                        }
+                    }
+                    catch (Exception) { }
+
+                    return Ok(new { status = "Paid" });
+                }
+            }
+            catch (Exception) { }
         }
 
         return Ok(new { status = "Pending" });
@@ -186,59 +323,46 @@ public class PaymentController : ControllerBase
                 endpointSecret ?? throw new InvalidOperationException("Stripe webhook secret is not configured")
             );
 
-            // Handle the event
             switch (stripeEvent.Type)
             {
                 case "checkout.session.completed":
                     var session = stripeEvent.Data.Object as Session;
                     if (session != null)
                     {
-                        // Handle successful payment
-                        Console.WriteLine($"Payment successful for session {session.Id}");
-                        if (session.Metadata.TryGetValue("appointmentId", out var appointmentIdStr) && 
+                        if (session.Metadata.TryGetValue("appointmentId", out var appointmentIdStr) &&
                             int.TryParse(appointmentIdStr, out var appointmentId))
                         {
-                             // We need to resolve DbContext here since we might lose scope, 
-                             // but Controller is Scoped so it's fine.
-                             // Need to inject DbContext constructor first
-                             // Assuming we add _context to PaymentController
-                             var appointment = await _context.Appointments.FindAsync(appointmentId);
-                             if (appointment != null)
-                             {
-                                 appointment.PaymentStatus = "Paid";
-                                 // Add Payment Record
-                                 var payment = new Payment
-                                 {
-                                     AppointmentId = appointmentId,
-                                     UserId = appointment.UserId,
-                                     Amount = (decimal)(session.AmountTotal ?? 0) / 100m,
-                                     Currency = session.Currency,
-                                     Method = "Stripe",
-                                     TransactionId = session.PaymentIntentId ?? session.Id,
-                                     Status = "Completed",
-                                     CreatedAt = DateTime.UtcNow
-                                 };
-                                 _context.Payments.Add(payment);
-                                 await _context.SaveChangesAsync();
+                            var appointment = await _context.Appointments.FindAsync(appointmentId);
+                            if (appointment != null)
+                            {
+                                appointment.PaymentStatus = "Paid";
+                                var payment = new Payment
+                                {
+                                    AppointmentId = appointmentId,
+                                    UserId = appointment.UserId,
+                                    Amount = (decimal)(session.AmountTotal ?? 0) / 100m,
+                                    Currency = session.Currency,
+                                    Method = "Stripe",
+                                    TransactionId = session.PaymentIntentId ?? session.Id,
+                                    Status = "Completed",
+                                    CreatedAt = DateTime.UtcNow
+                                };
+                                _context.Payments.Add(payment);
+                                await _context.SaveChangesAsync();
 
-                                 // Send Notification and Email
-                                 try 
-                                 {
-                                     await _notificationService.CreateNotification(appointment.UserId, $"Uspješno ste platili rezervaciju termina za {appointment.AppointmentDateTime:dd.MM.yyyy HH:mm}.", "Payment", payment.Id.ToString());
-                                     
-                                     // Fetch user email if not loaded
-                                     var user = await _context.Users.FindAsync(appointment.UserId);
-                                     if (user != null && !string.IsNullOrEmpty(user.Email))
-                                     {
-                                         await _emailService.SendEmailAsync(user.Email, "Potvrda rezervacije - ŠišApp", 
-                                             $"<h1>Rezervacija potvrđena!</h1><p>Poštovani/a {user.FirstName},</p><p>Vaša rezervacija za termin <strong>{appointment.AppointmentDateTime:dd.MM.yyyy HH:mm}</strong> je uspješno plaćena.</p><p>Hvala na povjerenju!</p>");
-                                     }
-                                 }
-                                 catch (Exception ex)
-                                 {
-                                     Console.WriteLine($"Error sending notification/email: {ex.Message}");
-                                 }
-                             }
+                                try
+                                {
+                                    await _notificationService.CreateNotification(appointment.UserId, $"Uspješno ste platili rezervaciju termina za {appointment.AppointmentDateTime:dd.MM.yyyy HH:mm}.", "Payment", payment.Id.ToString());
+
+                                    var user = await _context.Users.FindAsync(appointment.UserId);
+                                    if (user != null && !string.IsNullOrEmpty(user.Email))
+                                    {
+                                        await _emailService.SendEmailAsync(user.Email, "Potvrda rezervacije - ŠišApp",
+                                            $"<h1>Rezervacija potvrđena!</h1><p>Poštovani/a {user.FirstName},</p><p>Vaša rezervacija za termin <strong>{appointment.AppointmentDateTime:dd.MM.yyyy HH:mm}</strong> je uspješno plaćena.</p><p>Hvala na povjerenju!</p>");
+                                    }
+                                }
+                                catch (Exception) { }
+                            }
                         }
                     }
                     break;
@@ -246,12 +370,32 @@ public class PaymentController : ControllerBase
                     var paymentIntent = stripeEvent.Data.Object as PaymentIntent;
                     if (paymentIntent != null)
                     {
-                        // Handle successful payment intent
-                        Console.WriteLine($"Payment intent succeeded: {paymentIntent.Id}");
+                        if (paymentIntent.Metadata.TryGetValue("appointmentId", out var piAppIdStr) &&
+                            int.TryParse(piAppIdStr, out var piAppId))
+                        {
+                            var appointment = await _context.Appointments.FindAsync(piAppId);
+                            if (appointment != null && appointment.PaymentStatus != "Paid")
+                            {
+                                appointment.PaymentStatus = "Paid";
+                                var existingPayment = await _context.Payments.AnyAsync(p => p.AppointmentId == piAppId);
+                                if (!existingPayment)
+                                {
+                                    _context.Payments.Add(new Payment
+                                    {
+                                        AppointmentId = piAppId,
+                                        UserId = appointment.UserId,
+                                        Amount = (decimal)(paymentIntent.Amount) / 100m,
+                                        Currency = paymentIntent.Currency,
+                                        Method = "Stripe",
+                                        TransactionId = paymentIntent.Id,
+                                        Status = "Completed",
+                                        CreatedAt = DateTime.UtcNow
+                                    });
+                                }
+                                await _context.SaveChangesAsync();
+                            }
+                        }
                     }
-                    break;
-                default:
-                    Console.WriteLine($"Unhandled event type: {stripeEvent.Type}");
                     break;
             }
 
@@ -266,6 +410,7 @@ public class PaymentController : ControllerBase
             return StatusCode(500, new { error = $"Greška prilikom obrade webhook-a: {ex.Message}" });
         }
     }
+
     [AllowAnonymous]
     [HttpGet("success")]
     public ContentResult PaymentSuccess()
@@ -293,7 +438,7 @@ public class PaymentController : ControllerBase
                 </div>
             </body>
             </html>";
-            
+
         return new ContentResult
         {
             Content = html,
@@ -337,7 +482,26 @@ public class PaymentController : ControllerBase
     }
 }
 
+public class PaymentIntentRequest
+{
+    public long Amount { get; set; }
 
+    [Required]
+    public string ServiceName { get; set; } = string.Empty;
+
+    [Required]
+    [EmailAddress]
+    public string CustomerEmail { get; set; } = string.Empty;
+
+    public int? AppointmentId { get; set; }
+    public int? CustomerId { get; set; }
+}
+
+public class ConfirmPaymentRequest
+{
+    [Required]
+    public int AppointmentId { get; set; }
+}
 
 public class CheckoutSessionRequest
 {
@@ -362,4 +526,4 @@ public class CheckoutSessionRequest
     public int? AppointmentId { get; set; }
     public int? CustomerId { get; set; }
     public string? PaymentMethod { get; set; }
-} 
+}

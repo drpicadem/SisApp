@@ -257,7 +257,11 @@ class _SalonsScreenState extends State<SalonsScreen> {
                       TextFormField(
                         controller: _phoneController,
                         decoration: InputDecoration(labelText: 'Telefon'),
-                        validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return 'Obavezno';
+                          if (!RegExp(r'^\+?[0-9]{6,15}$').hasMatch(v)) return 'Nevažeći format telefona';
+                          return null;
+                        },
                       ),
                     ],
                   ),
@@ -304,7 +308,7 @@ class _SalonsScreenState extends State<SalonsScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Salon uspješno dodan!')));
                          Navigator.pop(context);
                       } else {
-                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Greška pri dodavanju salona.')));
+                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Operacija nije uspjela. Molimo provjerite podatke salona.')));
                       }
                     }
                   },

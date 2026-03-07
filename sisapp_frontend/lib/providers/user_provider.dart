@@ -34,12 +34,21 @@ class UserProvider extends ChangeNotifier {
     if (_authProvider?.tokenResponse == null) return false;
 
     bool success = await _apiService.deleteUser(userId, _authProvider!.tokenResponse!.token);
-    
     if (success) {
       _users.removeWhere((u) => u.id == userId);
       notifyListeners();
     }
-    
+    return success;
+  }
+
+  Future<bool> restoreUser(int userId) async {
+    if (_authProvider?.tokenResponse == null) return false;
+
+    bool success = await _apiService.restoreUser(userId, _authProvider!.tokenResponse!.token);
+    if (success) {
+      await loadUsers();
+    }
     return success;
   }
 }
+

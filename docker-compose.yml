@@ -74,6 +74,8 @@ services:
       - sisapp-api
     environment:
       - RabbitMQ__Host=${RABBITMQ_HOST}
+      - RabbitMQ__Username=${RABBITMQ_USER}
+      - RabbitMQ__Password=${RABBITMQ_PASS}
       - EmailSettings__SenderEmail=${SENDER_EMAIL}
       - EmailSettings__SenderPassword=${SENDER_PASSWORD}
       - EmailSettings__SmtpServer=${SMTP_SERVER}

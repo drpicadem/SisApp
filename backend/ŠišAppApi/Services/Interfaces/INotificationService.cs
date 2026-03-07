@@ -6,7 +6,7 @@ namespace ŠišAppApi.Services
     {
         Task<Notification> CreateNotification(int userId, string message, string type, string? data = null);
         Task<IEnumerable<Notification>> GetUserNotifications(int userId, bool unreadOnly = false);
-        Task MarkAsRead(int notificationId);
+        Task MarkAsRead(int notificationId, int userId);
         Task MarkAllAsRead(int userId);
     }
 }

@@ -44,4 +44,8 @@ msbuild.wrn
 # Environment files
 .env
 appsettings.Development.json
-appsettings.json 
+appsettings.json
+.agent/
+.agents/
+_agent/
+_agents/ 

@@ -64,4 +64,24 @@ class BarberProvider extends ChangeNotifier {
     notifyListeners();
     return createdId;
   }
+
+  Future<bool> updateBarber(int id, UpdateBarberDto dto) async {
+    if (_authProvider?.tokenResponse == null) return false;
+
+    try {
+      final updatedBarber = await _apiService.updateBarber(id, dto, _authProvider!.tokenResponse!.token);
+      if (updatedBarber != null) {
+        int index = _barbers.indexWhere((b) => b.id == id);
+        if (index != -1) {
+          _barbers[index] = updatedBarber;
+          notifyListeners();
+        }
+        return true;
+      }
+    } catch (e) {
+      print('Error updating barber: $e');
+      rethrow;
+    }
+    return false;
+  }
 }

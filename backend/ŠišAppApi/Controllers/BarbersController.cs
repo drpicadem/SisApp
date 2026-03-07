@@ -8,8 +8,8 @@ using System.Security.Cryptography;
 using System.Text;
 
 using System.Security.Claims;
-
 using Microsoft.AspNetCore.Authorization;
+using ŠišAppApi.Filters;
 
 namespace ŠišAppApi.Controllers;
 
@@ -240,5 +240,95 @@ public class BarbersController : ControllerBase
         public string Email { get; set; }
         public string Password { get; set; }
         public string Bio { get; set; }
+    }
+
+    public class UpdateBarberDto
+    {
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string Username { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string? Password { get; set; }
+        public string? Bio { get; set; }
+    }
+
+    [HttpPut("{id}")]
+    public async Task<ActionResult<object>> UpdateBarber(int id, UpdateBarberDto dto)
+    {
+        var barber = await _context.Barbers
+            .Include(b => b.User)
+            .FirstOrDefaultAsync(b => b.Id == id && !b.IsDeleted);
+
+        if (barber == null) return NotFound("Frizer nije pronađen.");
+
+        var existingUser = await _context.Users.AnyAsync(u => 
+            (u.Username == dto.Username || u.Email == dto.Email) && u.Id != barber.UserId && !u.IsDeleted);
+        if (existingUser) throw new UserException("Korisničko ime ili email su već u upotrebi.");
+
+        using var transaction = await _context.Database.BeginTransactionAsync();
+        try
+        {
+            barber.Bio = dto.Bio;
+            barber.UpdatedAt = DateTime.UtcNow;
+
+            if (barber.User != null)
+            {
+                barber.User.FirstName = dto.FirstName;
+                barber.User.LastName = dto.LastName;
+                barber.User.Email = dto.Email;
+                barber.User.Username = dto.Username;
+                barber.User.UpdatedAt = DateTime.UtcNow;
+
+                if (!string.IsNullOrEmpty(dto.Password))
+                {
+                    if (dto.Password.Length < 6) throw new UserException("Lozinka mora imati najmanje 6 karaktera.");
+                    if (BCrypt.Net.BCrypt.Verify(dto.Password, barber.User.PasswordHash))
+                        throw new UserException("Nova lozinka ne može biti ista kao stara.");
+                    
+                    barber.User.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            var currentUserIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (int.TryParse(currentUserIdString, out int currentUserId))
+            {
+                var admin = await _context.Admins.FirstOrDefaultAsync(a => a.UserId == currentUserId);
+                if (admin != null)
+                {
+                    _context.AdminLogs.Add(new AdminLog
+                    {
+                        AdminId = admin.Id,
+                        Action = "Update Barber",
+                        EntityType = "Barber",
+                        EntityId = barber.Id,
+                        Notes = $"Ažuriran frizer. Username: {dto.Username}",
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            await transaction.CommitAsync();
+
+            return Ok(new {
+                barber.Id,
+                barber.UserId,
+                barber.SalonId,
+                barber.Rating,
+                barber.Bio,
+                barber.ImageIds,
+                FirstName = barber.User?.FirstName,
+                LastName = barber.User?.LastName,
+                Email = barber.User?.Email,
+                Username = barber.User?.Username
+            });
+        }
+        catch (Exception)
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 }

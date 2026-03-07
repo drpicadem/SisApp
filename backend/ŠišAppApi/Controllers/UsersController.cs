@@ -1,134 +1,60 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ŠišAppApi.Data;
-using ŠišAppApi.Models;
-using ŠišAppApi.Services.Interfaces;
-
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using ŠišAppApi.Filters;
+using ŠišAppApi.Models;
+using ŠišAppApi.Models.DTOs;
+using ŠišAppApi.Models.Requests;
+using ŠišAppApi.Models.SearchObjects;
+using ŠišAppApi.Services.Interfaces;
 
 namespace ŠišAppApi.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize]
-public class UsersController : ControllerBase
+[Authorize(Roles = "Admin")]
+public class UsersController : BaseCRUDController<UserDto, UserSearchObject, UserInsertRequest, UserUpdateRequest>
 {
-    private readonly ApplicationDbContext _context;
     private readonly IImageService _imageService;
+    private readonly IUserService _userService;
 
-    public UsersController(ApplicationDbContext context, IImageService imageService)
+    public UsersController(IUserService userService, IImageService imageService) : base(userService)
     {
-        _context = context;
+        _userService = userService;
         _imageService = imageService;
     }
 
-    // GET: api/Users
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<User>>> GetUsers([FromQuery] string? role = null)
-    {
-        IQueryable<User> query = _context.Users;
-
-        if (!string.IsNullOrEmpty(role))
-        {
-            query = query.Where(u => u.Role == role);
-        }
-
-        return await query.ToListAsync();
-    }
-
-    // GET: api/Users/5
-    [HttpGet("{id}")]
-    public async Task<ActionResult<User>> GetUser(int id)
-    {
-        var user = await _context.Users.FindAsync(id);
-
-        if (user == null)
-        {
-            return NotFound();
-        }
-
-        return user;
-    }
-
-    // POST: api/Users
-    [HttpPost]
-    public async Task<ActionResult<User>> PostUser(User user)
-    {
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
-
-        return CreatedAtAction("GetUser", new { id = user.Id }, user);
-    }
-
-    // PUT: api/Users/5
-    [HttpPut("{id}")]
-    public async Task<IActionResult> PutUser(int id, User user)
-    {
-        if (id != user.Id)
-        {
-            return BadRequest();
-        }
-
-        _context.Entry(user).State = EntityState.Modified;
-
-        try
-        {
-            await _context.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            if (!UserExists(id))
-            {
-                return NotFound();
-            }
-            else
-            {
-                throw;
-            }
-        }
-
-        return NoContent();
-    }
-
-    // DELETE: api/Users/5
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteUser(int id)
+    public override async Task<ActionResult<UserDto>> Delete(int id)
     {
-        var user = await _context.Users.FindAsync(id);
-        if (user == null)
-        {
-            return NotFound();
-        }
+        var currentUserId = GetUserId();
+        if (currentUserId == id)
+            throw new UserException("Ne možete obrisati vlastiti račun");
 
-        _context.Users.Remove(user);
-        await _context.SaveChangesAsync();
-
-        return NoContent();
+        return await base.Delete(id);
     }
 
-    // POST: api/Users/5/upload-profile-image
+    [HttpPut("{id}/restore")]
+    public async Task<ActionResult<UserDto>> Restore(int id)
+    {
+        var result = await _userService.RestoreUser(id);
+        return Ok(result);
+    }
+
     [HttpPost("{id}/upload-profile-image")]
     [RequestSizeLimit(10 * 1024 * 1024)]
     public async Task<ActionResult<Image>> UploadProfileImage(int id, IFormFile file)
     {
-        var user = await _context.Users.FindAsync(id);
+        var user = await _userService.GetById(id);
         if (user == null) return NotFound();
 
-        // Delete old profile image if exists
         if (!string.IsNullOrEmpty(user.ImageId))
         {
             await _imageService.DeleteAsync(user.ImageId);
         }
 
         var image = await _imageService.UploadImageAsync(file, "profile", id, "User");
-        user.ImageId = image.Id;
-        await _context.SaveChangesAsync();
+        await _userService.UpdateProfileImageAsync(id, image.Id);
 
         return Ok(image);
     }
-
-    private bool UserExists(int id)
-    {
-        return _context.Users.Any(e => e.Id == id);
-    }
-} 
+}

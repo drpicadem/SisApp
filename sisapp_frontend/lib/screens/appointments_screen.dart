@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:intl/date_symbol_data_local.dart'; // Import for locale initialization
+import 'package:intl/date_symbol_data_local.dart'; 
 import '../providers/appointment_provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/appointment.dart';
@@ -20,12 +20,12 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
   @override
   void initState() {
     super.initState();
-    initializeDateFormatting('bs'); // Initialize Bosnian locale
+    initializeDateFormatting('bs'); 
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_onTabChanged);
     _scrollController.addListener(_onScroll);
 
-    // Initial fetch
+    
     Future.microtask(() => _fetchAppointments());
   }
 
@@ -85,7 +85,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
   Future<void> _showCancelDialog(BuildContext context, int appointmentId) async {
     return showDialog<void>(
       context: context,
-      barrierDismissible: false, // user must tap button!
+      barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
           title: Text('Otkazivanje termina'),
@@ -108,19 +108,21 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
               child: Text('Da, otkaži', style: TextStyle(color: Colors.red)),
               onPressed: () async {
                 Navigator.of(context).pop();
-                final success = await Provider.of<AppointmentProvider>(context, listen: false)
-                    .cancelAppointment(appointmentId);
-                
-                if (success) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Termin je uspješno otkazan.')),
-                  );
-                  // Refresh list
-                  _fetchAppointments(); 
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Došlo je do greške prilikom otkazivanja.')),
-                  );
+                try {
+                  final success = await Provider.of<AppointmentProvider>(context, listen: false)
+                      .cancelAppointment(appointmentId);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(success ? 'Termin je uspješno otkazan.' : 'Greška pri otkazivanju.')),
+                    );
+                    if (success) _fetchAppointments();
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                    );
+                  }
                 }
               },
             ),
@@ -145,7 +147,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
       ),
       body: Column(
         children: [
-          // Filter Section
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: SingleChildScrollView(
@@ -213,7 +214,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
                     final appointment = provider.appointments[index];
                     final currencyFormatter = NumberFormat.currency(locale: 'bs', symbol: 'KM');
                     
-                    // Grouping Logic
                     bool showHeader = false;
                     if (index == 0) {
                       showHeader = true;
@@ -282,7 +282,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
           children: [
             Row(
               children: [
-                // 1. Date Box
                 Container(
                   width: 60,
                   decoration: BoxDecoration(
@@ -315,8 +314,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
                   ),
                 ),
                 SizedBox(width: 16),
-                
-                // 2. Main Content
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -364,8 +361,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
                     ],
                   ),
                 ),
-                
-                // 3. Status Badge & Price
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -413,8 +408,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
               ],
             ),
             
-            // 4. Cancel Button (Only for Pending)
-            if (appointment.status == 'Pending')
+            if (appointment.status == 'Pending' || appointment.status == 'Confirmed')
               Padding(
                 padding: const EdgeInsets.only(top: 12.0),
                 child: Row(
@@ -437,7 +431,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
                 ),
               ),
 
-            // 5. Review Button (for Completed/Paid appointments - only for customers, not barbers)
             if ((appointment.status == 'Completed' || appointment.paymentStatus == 'Paid') &&
                 !context.read<AuthProvider>().isBarber)
               Padding(
