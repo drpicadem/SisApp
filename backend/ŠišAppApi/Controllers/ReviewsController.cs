@@ -74,6 +74,7 @@ public class ReviewsController : ControllerBase
         return Ok(reviews);
     }
 
+    [Authorize(Roles = AppRoles.Barber)]
     [HttpPut("{id}/respond")]
     public async Task<ActionResult<ReviewDto>> RespondToReview(int id, [FromBody] ReviewResponseDto dto)
     {

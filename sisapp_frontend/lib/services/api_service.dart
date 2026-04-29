@@ -1290,11 +1290,14 @@ class ApiService {
         Uri.parse('$baseUrl/Reviews/barber-reviews'),
         headers: {'Authorization': 'Bearer $token'},
       );
+      await _handleUnauthorizedResponse(response);
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         return data.map((json) => Review.fromJson(json)).toList();
       }
       return [];
+    } on UnauthorizedException {
+      rethrow;
     } catch (e) {
       print('Get barber reviews error: $e');
       return [];
@@ -1311,10 +1314,13 @@ class ApiService {
         },
         body: jsonEncode({'response': response}),
       );
+      await _handleUnauthorizedResponse(res);
       if (res.statusCode == 200) {
         return Review.fromJson(jsonDecode(res.body));
       }
       throw Exception(_extractApiError(res.body, 'Odgovor na recenziju nije uspio. Provjerite da odgovor nije prazan i pokušajte ponovo.'));
+    } on UnauthorizedException {
+      rethrow;
     } catch (e) {
       print('Respond to review error: $e');
       rethrow;

@@ -5,86 +5,89 @@ class BarberDashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.cut, size: 40, color: Colors.black),
+                  SizedBox(width: 12),
+                  Text(
+                    'ŠIŠAPP',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                      color: Colors.black,
+                      fontFamily: 'Serif',
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 36),
 
-              Icon(Icons.cut, size: 40, color: Colors.black),
-              SizedBox(width: 12),
-              Text(
-                'ŠIŠAPP',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                  color: Colors.black,
-                  fontFamily: 'Serif',
-                ),
+              _buildMenuButton(
+                context,
+                title: 'NARUDŽBE',
+                icon: Icons.list_alt,
+                route: '/appointments',
+              ),
+              SizedBox(height: 16),
+
+              _buildMenuButton(
+                context,
+                title: 'USLUGE',
+                icon: Icons.design_services_outlined,
+                route: '/services',
+              ),
+              SizedBox(height: 16),
+
+              _buildMenuButton(
+                context,
+                title: 'RADNO VRIJEME',
+                icon: Icons.schedule,
+                route: '/barber-schedule',
+              ),
+              SizedBox(height: 16),
+
+              _buildMenuButton(
+                context,
+                title: 'RECENZIJE',
+                icon: Icons.reviews_outlined,
+                route: '/barber-reviews',
+              ),
+              SizedBox(height: 16),
+
+              _buildMenuButton(
+                context,
+                title: 'RADNICI',
+                icon: Icons.person_outline,
+                route: '/barbers',
+              ),
+              SizedBox(height: 16),
+
+              _buildMenuButton(
+                context,
+                title: 'POSTAVKE',
+                icon: Icons.settings_outlined,
+                route: '/edit_salon',
+              ),
+              SizedBox(height: 16),
+
+              _buildMenuButton(
+                context,
+                title: 'MOJ PROFIL',
+                icon: Icons.person_outline,
+                route: '/edit-profile',
               ),
             ],
           ),
-          SizedBox(height: 60),
-
-          _buildMenuButton(
-            context,
-            title: 'NARUDŽBE',
-            icon: Icons.list_alt,
-            route: '/appointments',
-          ),
-          SizedBox(height: 24),
-
-          _buildMenuButton(
-            context,
-            title: 'USLUGE',
-            icon: Icons.design_services_outlined,
-            route: '/services',
-          ),
-          SizedBox(height: 24),
-
-          _buildMenuButton(
-            context,
-            title: 'RADNO VRIJEME',
-            icon: Icons.schedule,
-            route: '/barber-schedule',
-          ),
-          SizedBox(height: 24),
-
-          _buildMenuButton(
-            context,
-            title: 'RECENZIJE',
-            icon: Icons.reviews_outlined,
-            route: '/barber-reviews',
-          ),
-          SizedBox(height: 24),
-
-          _buildMenuButton(
-            context,
-            title: 'RADNICI',
-            icon: Icons.person_outline,
-            route: '/barbers',
-          ),
-          SizedBox(height: 24),
-
-          _buildMenuButton(
-            context,
-            title: 'POSTAVKE',
-            icon: Icons.settings_outlined,
-            route: '/edit_salon',
-          ),
-          SizedBox(height: 24),
-
-          _buildMenuButton(
-            context,
-            title: 'MOJ PROFIL',
-            icon: Icons.person_outline,
-            route: '/edit-profile',
-          ),
-        ],
+        ),
       ),
     );
   }

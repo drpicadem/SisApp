@@ -564,7 +564,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
               ),
 
             if ((appointment.status ?? '').toLowerCase() == 'completed' &&
-                !context.read<AuthProvider>().isBarber)
+                context.read<AuthProvider>().isCustomer)
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: Row(

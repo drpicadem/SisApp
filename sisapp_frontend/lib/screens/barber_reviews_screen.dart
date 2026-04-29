@@ -243,35 +243,37 @@ class _BarberReviewsScreenState extends State<BarberReviewsScreen> {
       builder: (ctx) {
         return AlertDialog(
           title: Text('Odgovor na recenziju'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('${review.userName} - ${review.rating}⭐',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(height: 4),
-              Text(review.comment, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-              SizedBox(height: 16),
-              Form(
-                key: formKey,
-                child: TextFormField(
-                controller: controller,
-                maxLines: 4,
-                maxLength: 500,
-                decoration: InputDecoration(
-                  hintText: 'Napišite odgovor (min. 5 znakova)...',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${review.userName} - ${review.rating}⭐',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  SizedBox(height: 4),
+                  Text(review.comment, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                  SizedBox(height: 16),
+                  TextFormField(
+                    controller: controller,
+                    maxLines: 4,
+                    maxLength: 500,
+                    decoration: InputDecoration(
+                      hintText: 'Napišite odgovor (min. 5 znakova)...',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    validator: (value) {
+                      final text = value?.trim() ?? '';
+                      if (text.length < 5) {
+                        return 'Odgovor mora imati najmanje 5 znakova.';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
                 ),
-                validator: (value) {
-                  final text = value?.trim() ?? '';
-                  if (text.length < 5) {
-                    return 'Odgovor mora imati najmanje 5 znakova.';
-                  }
-                  return null;
-                },
-                ),
-              ),
-            ],
+            ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Otkaži')),
@@ -311,6 +313,5 @@ class _BarberReviewsScreenState extends State<BarberReviewsScreen> {
         );
       },
     );
-    controller.dispose();
   }
 }
