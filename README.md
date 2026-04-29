@@ -1,72 +1,83 @@
 # ŠišApp
-Seminar paper for the course **Software Development II (Razvoj softvera II)**
 
-## Setup Instructions
+Seminar project for **Software Development II (Razvoj softvera II)**.
 
-> **Password for .zip files is `fit`**
+## Quick Start
+
+.
+
+1. Download `fit-build-2026-04-29.zip` from GitHub `Releases`.
+2. Extract package.
+3. Start backend with Docker.
+4. Start client applications from extracted package.
+5. Run booking and payment test flow.
 
 ---
 
-### Backend Setup
-1. Extract `fit-build-2026-03-03-env`
-2. Place the `.env` file into the project root directory 
-3. Open the project root directory in terminal and run:
+## Setup
+
+### 1) Download build package
+
+1. Open project GitHub repository.
+2. Go to `Releases` section.
+3. Download `fit-build-2026-04-29.zip`.
+4. Extract zip locally.
+
+### 2) Backend setup
+
+1. In project root, keep `.env-tajne.zip` (replacement for `.env`).
+2. Extract `.env-tajne.zip` in same folder to get `.env`.
+3. In project root, run:
+
    ```bash
    docker compose up --build
    ```
 
----
+### 3) Client applications setup
 
-### Desktop Application Setup
-1. Extract `fit-build-2026-03-03-desktop`
-2. Run `sisapp_desktop.exe` from the "Release" folder
-3. Login with admin credentials (see below)
-
----
-
-### Mobile Application Setup
-1. Uninstall the app from Android emulator if it already exists
-2. Extract `fit-build-2026-03-03-mobile`
-3. Drag the `.apk` file from "flutter-apk" folder to the emulator
-4. Wait for installation to complete
-5. Launch the app and login with credentials (see below)
+1. Desktop: run `sisapp_desktop.exe` from `Release` folder.
+2. Mobile: if app already installed on emulator, uninstall first.
+3. Mobile: drag `.apk` from `flutter-apk` folder to Android emulator.
+4. Wait for install, then launch app.
+5. Log in with matching test user (credentials below).
 
 ---
 
-## Testing Guide
+## Test Scenario
 
-### Main Testing Flow
-The core functionality follows this flow:
+Main business flow:
 
-**Admin manages salons/barbers (Desktop) → Barber sets up services (Mobile) → Customer books and pays for an appointment (Mobile)**
+**Admin manages salons/barbers (Desktop) -> Barber configures services and schedule (Mobile) -> Customer books and pays for appointment (Mobile)**
+
+### Step 1: Admin (Desktop)
+
+1. Log in as `desktop`.
+2. Create/edit salons, barbers, and services.
+
+### Step 2: Barber (Mobile)
+
+1. Log in as `barber`.
+2. Set salon profile and available services.
+3. Configure working schedule via **Calendar**.
+
+### Step 3: Customer (Mobile)
+
+1. Log in as `mobile` (use second device/emulator, or log out first).
+2. Browse salons and barbers.
+3. Select service and available time slot.
+4. Click **Book Appointment**.
+5. Pay with Stripe test card or PayPal sandbox account.
 
 ---
 
-#### Step 1: Admin Setup (Desktop)
-1. Login as **admin**
-2. Manage salons, barbers, and services through the admin panel
-
-#### Step 2: Barber Setup (Mobile)
-1. Login as **barber**
-2. Set up your salon profile and available services
-3. Configure your working schedule via **"Calendar"**
-
-#### Step 3: Customer Books Appointment (Mobile)
-1. Login as **mobile** (use a different device/emulator or logout first)
-2. Browse available salons and barbers
-3. Select a service and available time slot
-4. Click **"Book Appointment"**
-5. Complete payment with the test card
-
----
-
-## Credentials
+## Test Credentials
 
 | Platform | Role | Username | Password |
 |----------|------|----------|----------|
-| Desktop | Admin | `desktop` | `test` |
-| Mobile | Barber | `barber` | `test` |
-| Mobile | mobile | `mobile` | `test` |
+| Desktop  | Admin | `desktop` | `test` |
+| Mobile   | Barber | `barber` | `test` |
+| Mobile   | Barber | `barber1` | `test` |
+| Mobile   | Customer | `mobile` | `test` |
 
 ### Stripe Test Card
 
@@ -75,27 +86,21 @@ The core functionality follows this flow:
 | Card Number | `4242 4242 4242 4242` |
 | Expiry | `12/34` |
 | CVC | `123` |
-| ZIP | `12345` |
+
+### PayPal Sandbox Credentials
+
+| Field | Value |
+|-------|-------|
+| Email | `sb-iborh50894693@personal.example.com` |
+| Password | `Zd1nX;_b` |
 
 ---
-
-## Creating New Users
-
-When creating new users, the password must meet the following requirements:
-- At least one **uppercase letter** (A-Z)
-- At least one **lowercase letter** (a-z)
-- At least one **digit** (0-9)
-- At least one **special character** (!@#$%^&* etc.)
-
-> **Suggested test password:** `Test123!`
-
-
 
 ## Technology Stack
 
 | Component | Technologies |
-|-----------|-------------|
+|-----------|--------------|
 | Backend | ASP.NET Core, SQL Server, RabbitMQ, Docker |
-| Frontend | Flutter (Mobile & Desktop) |
+| Frontend | Flutter (Mobile and Desktop) |
 | Integrations | Stripe (payments), PayPal (payments) |
 | Recommender | Content-based filtering recommendation system |
