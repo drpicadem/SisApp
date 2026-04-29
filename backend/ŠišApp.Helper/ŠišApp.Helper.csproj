@@ -14,8 +14,4 @@
     <PackageReference Include="MimeKit" Version="4.3.0" />
     <PackageReference Include="MailKit" Version="4.3.0" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Compile Include="..\ŠišAppApi\Contracts\SendEmailEvent.cs" Link="Contracts\SendEmailEvent.cs" />
-  </ItemGroup>
 </Project>

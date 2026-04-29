@@ -15,8 +15,8 @@ public static class AppointmentStateMachine
 
         return fromStatus switch
         {
-            AppointmentStatuses.Pending => toStatus is AppointmentStatuses.Confirmed or AppointmentStatuses.Cancelled or AppointmentStatuses.Active,
-            AppointmentStatuses.Confirmed => toStatus is AppointmentStatuses.Cancelled or AppointmentStatuses.Active,
+            AppointmentStatuses.Pending => toStatus is AppointmentStatuses.Confirmed or AppointmentStatuses.Cancelled or AppointmentStatuses.Active or AppointmentStatuses.Completed,
+            AppointmentStatuses.Confirmed => toStatus is AppointmentStatuses.Cancelled or AppointmentStatuses.Active or AppointmentStatuses.Completed,
             AppointmentStatuses.Active => toStatus is AppointmentStatuses.Completed,
             AppointmentStatuses.Cancelled => false,
             AppointmentStatuses.Completed => false,
