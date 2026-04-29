@@ -19,7 +19,9 @@ class ReviewFormScreen extends StatefulWidget {
 }
 
 class _ReviewFormScreenState extends State<ReviewFormScreen> {
+  final _formKey = GlobalKey<FormState>();
   int _rating = 0;
+  String? _ratingError;
   final TextEditingController _commentController = TextEditingController();
   bool _isSubmitting = false;
 
@@ -41,19 +43,15 @@ class _ReviewFormScreenState extends State<ReviewFormScreen> {
   bool get _isEditing => widget.existingReview != null;
 
   Future<void> _submitReview() async {
-    if (_rating == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Molimo odaberite ocjenu (1-5 zvjezdica).')),
-      );
-      return;
-    }
-    if (_commentController.text.trim().length < 10) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Komentar mora imati najmanje 10 znakova.')),
-      );
+    final isValid = _formKey.currentState?.validate() ?? false;
+    if (!isValid) {
+      setState(() {
+        _ratingError = _rating == 0 ? 'Odaberite ocjenu od 1 do 5 zvjezdica.' : null;
+      });
       return;
     }
 
+    setState(() => _ratingError = null);
     setState(() => _isSubmitting = true);
 
     try {
@@ -80,7 +78,11 @@ class _ReviewFormScreenState extends State<ReviewFormScreen> {
       if (result != null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_isEditing ? 'Recenzija ažurirana!' : 'Recenzija uspješno ostavljena!'),
+            content: Text(
+              _isEditing
+                  ? 'Recenzija za uslugu "${widget.appointment.service?.name ?? 'Usluga'}" je uspješno ažurirana.'
+                  : 'Recenzija za uslugu "${widget.appointment.service?.name ?? 'Usluga'}" je uspješno kreirana.',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -108,10 +110,12 @@ class _ReviewFormScreenState extends State<ReviewFormScreen> {
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Appointment Info Card
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+
             Card(
               elevation: 2,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -146,28 +150,40 @@ class _ReviewFormScreenState extends State<ReviewFormScreen> {
             ),
             SizedBox(height: 24),
 
-            // Star Rating
+
             Text(
               'Vaša ocjena',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(5, (index) {
-                return GestureDetector(
-                  onTap: () => setState(() => _rating = index + 1),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: Icon(
-                      index < _rating ? Icons.star : Icons.star_border,
-                      size: 44,
-                      color: index < _rating ? Colors.amber : Colors.grey[400],
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) {
+                  return GestureDetector(
+                    onTap: () => setState(() {
+                      _rating = index + 1;
+                      _ratingError = null;
+                    }),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 4),
+                      child: Icon(
+                        index < _rating ? Icons.star : Icons.star_border,
+                        size: 44,
+                        color: index < _rating ? Colors.amber : Colors.grey[400],
+                      ),
                     ),
+                  );
+                }),
+              ),
+              if (_ratingError != null) ...[
+                SizedBox(height: 8),
+                Center(
+                  child: Text(
+                    _ratingError!,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
                   ),
-                );
-              }),
-            ),
+                ),
+              ],
             SizedBox(height: 8),
             Center(
               child: Text(
@@ -182,13 +198,13 @@ class _ReviewFormScreenState extends State<ReviewFormScreen> {
             ),
             SizedBox(height: 24),
 
-            // Comment
+
             Text(
               'Vaš komentar',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 8),
-            TextField(
+            TextFormField(
               controller: _commentController,
               maxLines: 5,
               maxLength: 500,
@@ -200,10 +216,17 @@ class _ReviewFormScreenState extends State<ReviewFormScreen> {
                 filled: true,
                 fillColor: Colors.grey[50],
               ),
+              validator: (value) {
+                final comment = value?.trim() ?? '';
+                if (comment.length < 10) {
+                  return 'Komentar mora imati najmanje 10 znakova.';
+                }
+                return null;
+              },
             ),
             SizedBox(height: 24),
 
-            // Submit Button
+
             SizedBox(
               width: double.infinity,
               height: 48,
@@ -231,7 +254,8 @@ class _ReviewFormScreenState extends State<ReviewFormScreen> {
                       ),
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );

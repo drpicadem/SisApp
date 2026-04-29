@@ -74,7 +74,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header: Service + Date
+
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -93,7 +93,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen> {
             ),
             SizedBox(height: 4),
 
-            // Salon + Barber
+
             if (review.salonName != null)
               Row(
                 children: [
@@ -112,7 +112,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen> {
             ),
             SizedBox(height: 8),
 
-            // Stars
+
             Row(
               children: List.generate(5, (i) => Icon(
                 i < review.rating ? Icons.star : Icons.star_border,
@@ -122,13 +122,13 @@ class _MyReviewsScreenState extends State<MyReviewsScreen> {
             ),
             SizedBox(height: 8),
 
-            // Comment
+
             Text(
               review.comment,
               style: TextStyle(fontSize: 14),
             ),
 
-            // Updated indicator
+
             if (review.updatedAt != null)
               Padding(
                 padding: EdgeInsets.only(top: 8),
@@ -138,7 +138,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen> {
                 ),
               ),
 
-            // Edit button
+
             Padding(
               padding: EdgeInsets.only(top: 8),
               child: Row(
@@ -148,7 +148,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen> {
                     icon: Icon(Icons.edit, size: 16),
                     label: Text('Uredi'),
                     onPressed: () async {
-                      // Create a minimal Appointment object for the form
+
                       final dummyAppointment = Appointment(
                         id: review.appointmentId,
                         userId: review.userId,

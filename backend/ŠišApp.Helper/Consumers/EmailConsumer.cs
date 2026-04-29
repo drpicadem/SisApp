@@ -32,7 +32,6 @@ namespace ŠišApp.Helper.Consumers
         public async Task Consume(ConsumeContext<SendEmailEvent> context)
         {
             _logger.LogInformation($"Received email request for: {context.Message.ToEmail}");
-// ... rest of logic
 
             try
             {
@@ -64,7 +63,7 @@ namespace ŠišApp.Helper.Consumers
             catch (System.Exception ex)
             {
                 _logger.LogError(ex, "Error sending email");
-                // In a real scenario, we might want to throw to let RabbitMQ retry
+                throw;
             }
         }
     }

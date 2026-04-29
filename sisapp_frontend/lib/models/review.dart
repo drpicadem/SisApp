@@ -1,3 +1,5 @@
+import 'package:sisapp_frontend/utils/api_datetime.dart';
+
 class Review {
   final int? id;
   final int userId;
@@ -50,12 +52,12 @@ class Review {
       serviceName: json['serviceName'],
       rating: (json['rating'] as num?)?.toInt() ?? 0,
       comment: json['comment'] ?? '',
-      createdAt: DateTime.parse(json['createdAt']),
-      updatedAt: json['updatedAt'] != null ? DateTime.parse(json['updatedAt']) : null,
+      createdAt: ApiDateTime.parse(json['createdAt']),
+      updatedAt: ApiDateTime.parseNullable(json['updatedAt']),
       helpfulCount: (json['helpfulCount'] as num?)?.toInt() ?? 0,
       isVerified: json['isVerified'] ?? false,
       barberResponse: json['barberResponse'],
-      barberRespondedAt: json['barberRespondedAt'] != null ? DateTime.parse(json['barberRespondedAt']) : null,
+      barberRespondedAt: ApiDateTime.parseNullable(json['barberRespondedAt']),
     );
   }
 

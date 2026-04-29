@@ -7,14 +7,18 @@ import 'api_service.dart';
 class ImageService {
   static String get baseUrl => ApiService.baseUrl;
 
-  /// Returns the full URL for an image path (e.g. /uploads/profile/abc.jpg)
+
   static String getFullImageUrl(String relativePath) {
-    // Derive server root from API base URL (strip /api suffix)
+
     final serverRoot = ApiService.baseUrl.replaceAll(RegExp(r'/api$'), '');
     return '$serverRoot$relativePath';
   }
 
-  /// Upload an image file and return the Image metadata from the server
+  static String getProtectedImageUrl(String imageId) {
+    return '$baseUrl/Images/file/$imageId';
+  }
+
+
   static Future<Map<String, dynamic>?> uploadImage(
     File file,
     String token, {
@@ -24,8 +28,8 @@ class ImageService {
   }) async {
     try {
       var uri = Uri.parse('$baseUrl/Images/upload');
-      
-      // Add query params
+
+
       final queryParams = <String, String>{};
       if (imageType != null) queryParams['imageType'] = imageType;
       if (entityId != null) queryParams['entityId'] = entityId.toString();
@@ -37,7 +41,7 @@ class ImageService {
       var request = http.MultipartRequest('POST', uri);
       request.headers['Authorization'] = 'Bearer $token';
 
-      // Determine content type from extension
+
       final ext = file.path.split('.').last.toLowerCase();
       final mimeType = {
         'jpg': 'image/jpeg',
@@ -71,7 +75,46 @@ class ImageService {
     }
   }
 
-  /// Get images for a specific entity
+  static Future<Map<String, dynamic>?> uploadMyProfileImage(
+    File file,
+    String token,
+  ) async {
+    try {
+      final uri = Uri.parse('$baseUrl/Profile/me/upload-image');
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer $token';
+
+      final ext = file.path.split('.').last.toLowerCase();
+      final mimeType = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'bmp': 'image/bmp',
+      }[ext] ?? 'application/octet-stream';
+
+      final parts = mimeType.split('/');
+      request.files.add(await http.MultipartFile.fromPath(
+        'file',
+        file.path,
+        contentType: MediaType(parts[0], parts[1]),
+      ));
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      print('Upload my profile image error: $e');
+      return null;
+    }
+  }
+
+
   static Future<List<Map<String, dynamic>>> getEntityImages(
     String entityType,
     int entityId,
@@ -94,7 +137,7 @@ class ImageService {
     }
   }
 
-  /// Delete an image by ID
+
   static Future<bool> deleteImage(String imageId, String token) async {
     try {
       final response = await http.delete(

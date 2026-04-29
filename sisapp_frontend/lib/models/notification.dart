@@ -1,7 +1,10 @@
+import 'package:sisapp_frontend/utils/api_datetime.dart';
+
 class Notification {
   final int id;
   final int userId;
   final String type;
+  final String title;
   final String message;
   final String? data;
   final bool isRead;
@@ -12,6 +15,7 @@ class Notification {
     required this.id,
     required this.userId,
     required this.type,
+    required this.title,
     required this.message,
     this.data,
     required this.isRead,
@@ -24,11 +28,12 @@ class Notification {
       id: json['id'],
       userId: json['userId'],
       type: json['type'],
+      title: (json['title'] ?? json['message'] ?? 'Obavještenje').toString(),
       message: json['message'],
       data: json['data'],
       isRead: json['isRead'],
-      sentAt: DateTime.parse(json['sentAt']),
-      readAt: json['readAt'] != null ? DateTime.parse(json['readAt']) : null,
+      sentAt: ApiDateTime.parse(json['sentAt']),
+      readAt: ApiDateTime.parseNullable(json['readAt']),
     );
   }
 
@@ -37,11 +42,12 @@ class Notification {
       'id': id,
       'userId': userId,
       'type': type,
+      'title': title,
       'message': message,
       'data': data,
       'isRead': isRead,
-      'sentAt': sentAt.toIso8601String(),
-      'readAt': readAt?.toIso8601String(),
+      'sentAt': ApiDateTime.toUtcIso(sentAt),
+      'readAt': readAt != null ? ApiDateTime.toUtcIso(readAt!) : null,
     };
   }
 }

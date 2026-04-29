@@ -1,9 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ŠišAppApi.Data;
-using ŠišAppApi.Models;
 using Microsoft.AspNetCore.Authorization;
-using System.Security.Claims;
+using ŠišAppApi.Filters;
+using ŠišAppApi.Services.Interfaces;
 
 namespace ŠišAppApi.Controllers;
 
@@ -12,85 +10,54 @@ namespace ŠišAppApi.Controllers;
 [Authorize]
 public class FavoritesController : ControllerBase
 {
-    private readonly ApplicationDbContext _context;
+    private const int DefaultPageSize = 20;
+    private readonly IFavoriteService _favoriteService;
+    private readonly ICurrentUserService _currentUser;
 
-    public FavoritesController(ApplicationDbContext context)
+    public FavoritesController(IFavoriteService favoriteService, ICurrentUserService currentUser)
     {
-        _context = context;
+        _favoriteService = favoriteService;
+        _currentUser = currentUser;
     }
 
     private int GetCurrentUserId()
     {
-        var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (int.TryParse(userIdString, out int userId))
-        {
-            return userId;
-        }
-        throw new Exception("User ID not found in token");
+        if (_currentUser.UserId.HasValue)
+            return _currentUser.UserId.Value;
+        throw new UnauthorizedAccessException("User ID not found in token");
     }
 
-    // GET: api/Favorites/salons
     [HttpGet("salons")]
-    public async Task<ActionResult<IEnumerable<int>>> GetFavoriteSalonIds()
+    public async Task<ActionResult<IEnumerable<int>>> GetFavoriteSalonIds(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize)
     {
         try
         {
-            var userId = GetCurrentUserId();
-            var favoriteSalonIds = await _context.FavoriteSalons
-                .Where(f => f.UserId == userId)
-                .Select(f => f.SalonId)
-                .ToListAsync();
-
-            return Ok(favoriteSalonIds);
+            var ids = await _favoriteService.GetFavoriteSalonIdsAsync(GetCurrentUserId(), page, pageSize);
+            return Ok(ids);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return Unauthorized(new { message = ex.Message });
+            return Unauthorized(new { message = "Neuspješna autorizacija." });
         }
     }
 
-    // POST: api/Favorites/toggle/5
     [HttpPost("toggle/{salonId}")]
     public async Task<IActionResult> ToggleFavoriteSalon(int salonId)
     {
         try
         {
-            var userId = GetCurrentUserId();
-
-            var salon = await _context.Salons.FindAsync(salonId);
-            if (salon == null)
-            {
-                return NotFound(new { message = "Salon not found" });
-            }
-
-            var existingFavorite = await _context.FavoriteSalons
-                .FirstOrDefaultAsync(f => f.UserId == userId && f.SalonId == salonId);
-
-            if (existingFavorite != null)
-            {
-                // Unfavorite
-                _context.FavoriteSalons.Remove(existingFavorite);
-                await _context.SaveChangesAsync();
-                return Ok(new { isFavorite = false });
-            }
-            else
-            {
-                // Favorite
-                var newFavorite = new FavoriteSalon
-                {
-                    UserId = userId,
-                    SalonId = salonId,
-                    CreatedAt = DateTime.UtcNow
-                };
-                
-                _context.FavoriteSalons.Add(newFavorite);
-                await _context.SaveChangesAsync();
-                return Ok(new { isFavorite = true });
-            }
+            var isFavorite = await _favoriteService.ToggleFavoriteSalonAsync(GetCurrentUserId(), salonId);
+            return Ok(new { isFavorite });
         }
-        catch (Exception ex)
+        catch (NotFoundException ex)
         {
-            return Unauthorized(new { message = ex.Message });
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception)
+        {
+            return Unauthorized(new { message = "Neuspješna autorizacija." });
         }
     }
 }

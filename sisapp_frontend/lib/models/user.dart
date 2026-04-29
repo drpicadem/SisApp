@@ -1,9 +1,12 @@
+import 'package:sisapp_frontend/utils/api_datetime.dart';
+
 class User {
   final int id;
   final String username;
   final String email;
   final String firstName;
   final String lastName;
+  final String? phoneNumber;
   final String role;
   final bool isActive;
   final DateTime createdAt;
@@ -14,6 +17,7 @@ class User {
     required this.email,
     required this.firstName,
     required this.lastName,
+    this.phoneNumber,
     required this.role,
     required this.isActive,
     required this.createdAt,
@@ -26,9 +30,10 @@ class User {
       email: json['email'] ?? '',
       firstName: json['firstName'] ?? '',
       lastName: json['lastName'] ?? '',
+      phoneNumber: json['phoneNumber']?.toString(),
       role: json['role'] ?? '',
       isActive: json['isActive'] ?? true,
-      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : DateTime.now(),
+      createdAt: ApiDateTime.parse(json['createdAt']),
     );
   }
 }

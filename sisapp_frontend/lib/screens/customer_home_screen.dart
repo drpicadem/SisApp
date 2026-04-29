@@ -2,14 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/salon_provider.dart';
+import '../providers/notification_provider.dart';
 import '../models/salon.dart';
 import '../widgets/entity_image.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/api_service.dart';
 import 'notifications_screen.dart';
 import 'appointments_screen.dart';
-import 'my_reviews_screen.dart';
+import '../features/reviews/screens/my_reviews_screen.dart';
 import 'favorites_screen.dart';
+import 'user/edit_profile_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   @override
@@ -18,6 +20,8 @@ class CustomerHomeScreen extends StatefulWidget {
 
 class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   int _currentIndex = 0;
+  int _profileImageRefreshTick = 0;
+  bool _initialArgsApplied = false;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _recommendations = [];
@@ -43,11 +47,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         return;
       }
     }
-    
+
     if (permission == LocationPermission.deniedForever) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lokacijske dozvole su trajno odbijene.')));
       return;
-    } 
+    }
 
     try {
       final position = await Geolocator.getCurrentPosition(
@@ -104,14 +108,47 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialArgsApplied) return;
+
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map) {
+      final initialIndex = args['initialIndex'];
+      if (initialIndex is int && initialIndex >= 0 && initialIndex <= 3) {
+        _currentIndex = initialIndex;
+      }
+    }
+
+    _initialArgsApplied = true;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    int appointmentsInitialTab = 0;
+    int? focusAppointmentId;
+    if (args is Map) {
+      final tabArg = args['appointmentsInitialTab'];
+      final focusArg = args['focusAppointmentId'];
+      if (tabArg is int && tabArg >= 0 && tabArg <= 1) {
+        appointmentsInitialTab = tabArg;
+      }
+      if (focusArg is int) {
+        focusAppointmentId = focusArg;
+      }
+    }
+
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
         children: [
           _buildHomeTab(),
           FavoritesScreen(),
-          AppointmentsScreen(),
+          AppointmentsScreen(
+            initialTab: appointmentsInitialTab,
+            focusAppointmentId: focusAppointmentId,
+          ),
           _buildProfileTab(),
         ],
       ),
@@ -160,12 +197,20 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         centerTitle: false,
         automaticallyImplyLeading: false,
         actions: [
-          IconButton(
-            icon: Icon(Icons.notifications_outlined),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => NotificationsScreen()),
+          Consumer<NotificationProvider>(
+            builder: (context, notificationProvider, _) {
+              return IconButton(
+                icon: Badge(
+                  isLabelVisible: notificationProvider.unreadCount > 0,
+                  label: Text(notificationProvider.unreadCount.toString()),
+                  child: Icon(Icons.notifications_outlined),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => NotificationsScreen()),
+                  );
+                },
               );
             },
           ),
@@ -179,7 +224,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
           var salons = salonProvider.salons.where((salon) {
             final query = _searchQuery.toLowerCase();
-            return query.isEmpty || 
+            return query.isEmpty ||
                    salon.name.toLowerCase().contains(query) ||
                    salon.city.toLowerCase().contains(query) ||
                    (salon.services != null && salon.services!.any((s) => s.toLowerCase().contains(query)));
@@ -189,7 +234,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             salons.sort((a, b) {
               if (a.latitude == null || a.longitude == null) return 1;
               if (b.latitude == null || b.longitude == null) return -1;
-              
+
               double distA = Geolocator.distanceBetween(
                 _currentPosition!.latitude, _currentPosition!.longitude,
                 a.latitude!, a.longitude!
@@ -205,7 +250,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           return ListView(
             children: [
               _buildSearchBar(),
-              // Recommendations section
+
               if (!_loadingRecommendations && _recommendations.isNotEmpty) ...[
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
@@ -263,6 +308,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   Widget _buildProfileTab() {
     final authProvider = Provider.of<AuthProvider>(context);
+    final token = authProvider.tokenResponse?.token ?? '';
+    final userId = authProvider.userId;
 
     return Scaffold(
       appBar: AppBar(
@@ -274,11 +321,23 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         padding: EdgeInsets.all(16),
         children: [
           SizedBox(height: 24),
-          CircleAvatar(
-            radius: 50,
-            backgroundColor: Color(0xFFE8DFF0),
-            child: Icon(Icons.person, size: 50, color: Color(0xFF7B5EA7)),
-          ),
+          if (userId != null)
+            EntityImage(
+              key: ValueKey('profile-tab-image-$userId-$_profileImageRefreshTick'),
+              entityType: 'User',
+              entityId: userId,
+              token: token,
+              isCircular: true,
+              circularRadius: 50,
+              placeholderIcon: Icons.person,
+              placeholderIconSize: 50,
+            )
+          else
+            CircleAvatar(
+              radius: 50,
+              backgroundColor: Color(0xFFE8DFF0),
+              child: Icon(Icons.person, size: 50, color: Color(0xFF7B5EA7)),
+            ),
           SizedBox(height: 16),
           Text(
             authProvider.username ?? 'Korisnik',
@@ -313,12 +372,50 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           ListTile(
             leading: Icon(Icons.notifications_outlined),
             title: Text('Obavještenja'),
-            trailing: Icon(Icons.chevron_right),
+            trailing: Consumer<NotificationProvider>(
+              builder: (context, notificationProvider, _) {
+                if (notificationProvider.unreadCount <= 0) {
+                  return Icon(Icons.chevron_right);
+                }
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Badge(
+                      label: Text(notificationProvider.unreadCount.toString()),
+                      child: SizedBox(width: 10, height: 10),
+                    ),
+                    SizedBox(width: 8),
+                    Icon(Icons.chevron_right),
+                  ],
+                );
+              },
+            ),
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => NotificationsScreen()),
               );
+            },
+          ),
+          Divider(),
+          ListTile(
+            leading: Icon(Icons.edit_outlined),
+            title: Text('Uredi profil'),
+            trailing: Icon(Icons.chevron_right),
+            onTap: () async {
+              final updated = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const EditProfileScreen()),
+              );
+              if (updated == true && mounted) {
+                await context.read<SalonProvider>().loadSalons();
+                await _loadRecommendations();
+                setState(() {
+                  _profileImageRefreshTick++;
+                  _searchQuery = '';
+                });
+                _searchController.clear();
+              }
             },
           ),
           Divider(),
@@ -398,7 +495,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             ),
             child: IconButton(
               icon: Icon(
-                _useLocation ? Icons.location_on : Icons.location_off, 
+                _useLocation ? Icons.location_on : Icons.location_off,
                 color: _useLocation ? Color(0xFF7B5EA7) : Colors.grey,
               ),
               onPressed: () {
@@ -422,15 +519,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
     return GestureDetector(
       onTap: () {
-        // Navigate to salon details
+
         final salon = Salon(
           id: rec['salonId'] ?? 0,
           name: rec['salonName'] ?? '',
+          cityId: 0,
           city: rec['salonCity'] ?? '',
           address: '',
           phone: '',
           postalCode: '',
-          country: '',
           employeeCount: 0,
           rating: salonRating,
         );
@@ -447,7 +544,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Service name
+
                 Text(
                   rec['serviceName'] ?? '',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
@@ -455,7 +552,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 SizedBox(height: 4),
-                // Salon info
+
                 Row(
                   children: [
                     Icon(Icons.store, size: 14, color: Colors.grey[600]),
@@ -482,7 +579,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   ],
                 ),
                 SizedBox(height: 8),
-                // Price and duration
+
                 Row(
                   children: [
                     Container(
@@ -511,7 +608,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   ],
                 ),
                 SizedBox(height: 6),
-                // Stars
+
                 Row(
                   children: List.generate(5, (i) => Icon(
                     i < salonRating.round() ? Icons.star : Icons.star_border,
@@ -520,7 +617,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   )),
                 ),
                 Spacer(),
-                // Reason
+
                 Text(
                   rec['reason'] ?? '',
                   style: TextStyle(fontSize: 11, color: Color(0xFF7B5EA7), fontStyle: FontStyle.italic),
@@ -537,7 +634,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   Widget _buildSalonListItem(Salon salon) {
     final token = context.read<AuthProvider>().tokenResponse?.token ?? '';
-    
+
     String distanceText = '';
     if (_useLocation && _currentPosition != null && salon.latitude != null && salon.longitude != null) {
       double distInMeters = Geolocator.distanceBetween(
@@ -550,7 +647,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         distanceText = '${(distInMeters / 1000).toStringAsFixed(1)} km';
       }
     }
-    
+
     return Card(
       elevation: 2,
       margin: EdgeInsets.only(bottom: 12),
@@ -582,7 +679,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 ),
               ),
               SizedBox(width: 16),
-              // Salon info
+
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

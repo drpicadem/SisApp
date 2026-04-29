@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../utils/form_validators.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -11,6 +12,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _showPassword = false;
 
   @override
   Widget build(BuildContext context) {
@@ -40,12 +42,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   labelText: 'Korisničko ime',
                   border: OutlineInputBorder(),
                 ),
-                validator: (value) {
-                  if (value?.isEmpty ?? true) {
-                    return 'Unesite korisničko ime';
-                  }
-                  return null;
-                },
+                validator: FormValidators.username,
               ),
               SizedBox(height: 16),
               TextFormField(
@@ -53,14 +50,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: InputDecoration(
                   labelText: 'Lozinka',
                   border: OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () {
+                      setState(() {
+                        _showPassword = !_showPassword;
+                      });
+                    },
+                  ),
                 ),
-                obscureText: true,
-                validator: (value) {
-                  if (value?.isEmpty ?? true) {
-                    return 'Unesite lozinku';
-                  }
-                  return null;
-                },
+                obscureText: !_showPassword,
+                validator: FormValidators.password,
               ),
               SizedBox(height: 24),
               Consumer<AuthProvider>(
@@ -77,6 +77,16 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
               ),
               SizedBox(height: 16),
+              TextButton(
+                onPressed: () {
+                  Navigator.pushNamed(context, '/forgot-password');
+                },
+                child: Text(
+                  'Zaboravili ste lozinku?',
+                  style: TextStyle(color: Colors.blue),
+                ),
+              ),
+              SizedBox(height: 8),
               TextButton(
                 onPressed: () {
                   Navigator.pushReplacementNamed(context, '/register');

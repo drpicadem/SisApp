@@ -1,8 +1,8 @@
 class WorkingHours {
   final int? id;
   final int barberId;
-  final int dayOfWeek; // 0 = Sunday, 6 = Saturday
-  final String startTime; // "HH:mm:ss"
+  final int dayOfWeek;
+  final String startTime;
   final String endTime;
   final bool isWorking;
   final String? notes;
@@ -44,6 +44,6 @@ class WorkingHours {
     return days[dayOfWeek];
   }
 
-  String get formattedStartTime => startTime.substring(0, 5); // "HH:mm"
+  String get formattedStartTime => startTime.substring(0, 5);
   String get formattedEndTime => endTime.substring(0, 5);
 }

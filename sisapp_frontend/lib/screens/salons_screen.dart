@@ -1,11 +1,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:image_picker/image_picker.dart';
 import '../providers/salon_provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/salon.dart';
+import '../models/city.dart';
+import '../services/api_service.dart';
 import '../services/image_service.dart';
+import '../utils/form_validators.dart';
+import '../widgets/image_picker_widget.dart';
 
 class SalonsScreen extends StatefulWidget {
   @override
@@ -14,17 +17,31 @@ class SalonsScreen extends StatefulWidget {
 
 class _SalonsScreenState extends State<SalonsScreen> {
   String _searchQuery = '';
+  List<City> _cities = [];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SalonProvider>().loadSalons();
+      _loadCities();
+    });
+  }
+
+  Future<void> _loadCities() async {
+    final token = context.read<AuthProvider>().tokenResponse?.token;
+    if (token == null || token.isEmpty) return;
+    final cities = await ApiService().getCities(token);
+    if (!mounted) return;
+    setState(() {
+      _cities = cities;
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final canAddSalon = _cities.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Pregled Frizerskih Salona'),
@@ -149,6 +166,18 @@ class _SalonsScreenState extends State<SalonsScreen> {
                       ),
                     ),
                   ),
+                  if (provider.hasMore || provider.isLoadingMore)
+                    Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Center(
+                        child: provider.isLoadingMore
+                            ? const CircularProgressIndicator()
+                            : OutlinedButton(
+                                onPressed: () => context.read<SalonProvider>().loadSalons(refresh: false),
+                                child: const Text('Učitaj još'),
+                              ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -156,7 +185,8 @@ class _SalonsScreenState extends State<SalonsScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddSalonDialog(context),
+        onPressed: canAddSalon ? () => _showAddSalonDialog(context) : null,
+        tooltip: canAddSalon ? 'Dodaj salon' : 'Nema gradova u tabeli',
         label: Text('Dodaj salon'),
         icon: Icon(Icons.add),
         backgroundColor: Color(0xFFE0CFA9),
@@ -166,14 +196,12 @@ class _SalonsScreenState extends State<SalonsScreen> {
 
   void _showAddSalonDialog(BuildContext context) {
     final _nameController = TextEditingController();
-    final _cityController = TextEditingController();
+    int? _selectedCityId;
     final _addressController = TextEditingController();
     final _phoneController = TextEditingController();
     final _postalCodeController = TextEditingController();
-    final _countryController = TextEditingController();
     final _formKey = GlobalKey<FormState>();
     File? _selectedImage;
-    final _picker = ImagePicker();
 
     showDialog(
       context: context,
@@ -181,87 +209,73 @@ class _SalonsScreenState extends State<SalonsScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text('Novi Frizerski Salon'),
+              title: Row(
+                children: [
+                  Expanded(child: Text('Novi Frizerski Salon')),
+                  IconButton(
+                    tooltip: 'Zatvori formu',
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(Icons.close),
+                  ),
+                ],
+              ),
               content: SingleChildScrollView(
                 child: Form(
                   key: _formKey,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Image picker
-                      GestureDetector(
-                        onTap: () async {
-                          final XFile? pickedFile = await _picker.pickImage(
-                            source: ImageSource.gallery,
-                            maxWidth: 1024,
-                            maxHeight: 1024,
-                            imageQuality: 85,
-                          );
-                          if (pickedFile != null) {
-                            setDialogState(() {
-                              _selectedImage = File(pickedFile.path);
-                            });
-                          }
+
+                      ImagePickerWidget(
+                        token: context.read<AuthProvider>().tokenResponse?.token,
+                        imageType: 'salon',
+                        deferUpload: true,
+                        isCircular: false,
+                        size: 120,
+                        onFileSelected: (file) {
+                          setDialogState(() {
+                            _selectedImage = file;
+                          });
                         },
-                        child: Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[300],
-                            borderRadius: BorderRadius.circular(12),
-                            image: _selectedImage != null
-                                ? DecorationImage(
-                                    image: FileImage(_selectedImage!),
-                                    fit: BoxFit.cover,
-                                  )
-                                : null,
-                          ),
-                          child: _selectedImage == null
-                              ? Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.add_a_photo, size: 32, color: Colors.grey[600]),
-                                    SizedBox(height: 4),
-                                    Text('Dodaj sliku', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                                  ],
-                                )
-                              : null,
-                        ),
                       ),
                       SizedBox(height: 16),
                       TextFormField(
                         controller: _nameController,
                         decoration: InputDecoration(labelText: 'Naziv Salona'),
-                        validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                        validator: FormValidators.salonName,
                       ),
-                      TextFormField(
-                        controller: _cityController,
+                      DropdownButtonFormField<int>(
+                        initialValue: _selectedCityId,
                         decoration: InputDecoration(labelText: 'Grad'),
-                        validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                        items: _cities
+                            .map(
+                              (city) => DropdownMenuItem<int>(
+                                value: city.id,
+                                child: Text(city.name),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            _selectedCityId = value;
+                          });
+                        },
+                        validator: (value) => value == null ? 'Odaberite grad' : null,
                       ),
                        TextFormField(
                         controller: _postalCodeController,
                         decoration: InputDecoration(labelText: 'Poštanski broj'),
-                        validator: (v) => v!.isEmpty ? 'Obavezno' : null,
-                      ),
-                       TextFormField(
-                        controller: _countryController,
-                        decoration: InputDecoration(labelText: 'Država'),
-                         validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                        validator: FormValidators.postalCode,
                       ),
                       TextFormField(
                         controller: _addressController,
                         decoration: InputDecoration(labelText: 'Adresa'),
-                        validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                        validator: FormValidators.address,
                       ),
                       TextFormField(
                         controller: _phoneController,
                         decoration: InputDecoration(labelText: 'Telefon'),
-                        validator: (v) {
-                          if (v == null || v.isEmpty) return 'Obavezno';
-                          if (!RegExp(r'^\+?[0-9]{6,15}$').hasMatch(v)) return 'Nevažeći format telefona';
-                          return null;
-                        },
+                        validator: FormValidators.phone,
                       ),
                     ],
                   ),
@@ -278,21 +292,21 @@ class _SalonsScreenState extends State<SalonsScreen> {
                       final salon = Salon(
                         id: 0,
                         name: _nameController.text,
-                        city: _cityController.text,
+                        cityId: _selectedCityId ?? 0,
+                        city: _cities.firstWhere((c) => c.id == (_selectedCityId ?? 0)).name,
                         address: _addressController.text,
                         phone: _phoneController.text,
                         postalCode: _postalCodeController.text,
-                        country: _countryController.text,
                         employeeCount: 0,
                         rating: 0,
                       );
 
                       final createdId = await context.read<SalonProvider>().addSalon(salon);
-                      
+
                       if (!context.mounted) return;
 
                       if (createdId != null) {
-                        // Upload image if selected
+
                         if (_selectedImage != null) {
                           final token = context.read<AuthProvider>().tokenResponse?.token;
                           if (token != null) {
@@ -305,10 +319,18 @@ class _SalonsScreenState extends State<SalonsScreen> {
                             );
                           }
                         }
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Salon uspješno dodan!')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Salon "${_nameController.text.trim()}" je dodan u gradu "${_cities.firstWhere((c) => c.id == (_selectedCityId ?? 0)).name}".',
+                            ),
+                          ),
+                        );
                          Navigator.pop(context);
                       } else {
-                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Operacija nije uspjela. Molimo provjerite podatke salona.')));
+                         ScaffoldMessenger.of(context).showSnackBar(
+                           SnackBar(content: Text('Dodavanje salona nije uspjelo. Provjerite naziv, adresu i kontakt podatke.')),
+                         );
                       }
                     }
                   },
@@ -326,9 +348,18 @@ class _SalonsScreenState extends State<SalonsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(salon.isActive ? 'Suspenduj Salon' : 'Aktiviraj Salon'),
-        content: Text(salon.isActive 
-            ? 'Da li ste sigurni da želite suspendovati salon "${salon.name}"? Vlasnik se neće moći prijaviti.' 
+        title: Row(
+          children: [
+            Expanded(child: Text(salon.isActive ? 'Suspenduj Salon' : 'Aktiviraj Salon')),
+            IconButton(
+              tooltip: 'Zatvori formu',
+              onPressed: () => Navigator.pop(ctx),
+              icon: Icon(Icons.close),
+            ),
+          ],
+        ),
+        content: Text(salon.isActive
+            ? 'Da li ste sigurni da želite suspendovati salon "${salon.name}"? Vlasnik se neće moći prijaviti.'
             : 'Da li ste sigurni da želite ponovo aktivirati salon "${salon.name}"?'),
         actions: [
           TextButton(
@@ -342,9 +373,14 @@ class _SalonsScreenState extends State<SalonsScreen> {
               final success = await context.read<SalonProvider>().toggleStatus(salon);
               if (mounted) {
                 if (success) {
-                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status promijenjen.')));
+                   final action = salon.isActive ? 'suspendovan' : 'aktiviran';
+                   ScaffoldMessenger.of(context).showSnackBar(
+                     SnackBar(content: Text('Salon "${salon.name}" je uspješno $action.')),
+                   );
                 } else {
-                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Greška pri promjeni statusa.')));
+                   ScaffoldMessenger.of(context).showSnackBar(
+                     SnackBar(content: Text('Promjena statusa nije uspjela. Pokušajte ponovo.')),
+                   );
                 }
               }
             },

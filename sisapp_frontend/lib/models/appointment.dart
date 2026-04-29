@@ -2,6 +2,7 @@ import 'package:sisapp_frontend/models/user.dart';
 import 'package:sisapp_frontend/models/barber.dart';
 import 'package:sisapp_frontend/models/service.dart';
 import 'package:sisapp_frontend/models/salon.dart';
+import 'package:sisapp_frontend/utils/api_datetime.dart';
 
 class Appointment {
   final int? id;
@@ -12,20 +13,22 @@ class Appointment {
   final DateTime appointmentDateTime;
   final String status;
   final String? paymentStatus;
+  final bool isPaid;
   final String? notes;
-  
-  // Navigation Properties (match C# backend)
-  // Navigation Properties (match C# backend)
-  final User? user; 
+  final String? cancellationReason;
+
+
+
+  final User? user;
   final Barber? barber;
   final Service? service;
   final Salon? salon;
-  // Note: ideally we should use strong types (User, Barber, Service, etc.) 
-  // but to avoid circular deps or complex parsing for now, user dynamic or specific types if available.
-  // Actually, let's use the specific types if we import them.
-  // But wait, the error said 'Service', 'Barber' getters missing. 
-  // Backend likely sends specific objects. 
-  
+
+
+
+
+
+
   Appointment({
     this.id,
     required this.userId,
@@ -35,7 +38,9 @@ class Appointment {
     required this.appointmentDateTime,
     this.status = 'Pending',
     this.paymentStatus,
+    this.isPaid = false,
     this.notes,
+    this.cancellationReason,
     this.user,
     this.barber,
     this.service,
@@ -48,10 +53,11 @@ class Appointment {
       'barberId': barberId,
       'serviceId': serviceId,
       'salonId': salonId,
-      'appointmentDateTime': appointmentDateTime.toIso8601String(),
+      'appointmentDateTime': ApiDateTime.toUtcIso(appointmentDateTime),
       'status': status,
       'paymentStatus': paymentStatus,
       'notes': notes,
+      'cancellationReason': cancellationReason,
     };
     if (id != null) {
       data['id'] = id;
@@ -66,17 +72,19 @@ class Appointment {
       barberId: (json['barberId'] as num?)?.toInt() ?? 0,
       serviceId: (json['serviceId'] as num?)?.toInt() ?? 0,
       salonId: (json['salonId'] as num?)?.toInt() ?? 0,
-      appointmentDateTime: DateTime.parse(json['appointmentDateTime']),
+      appointmentDateTime: ApiDateTime.parse(json['appointmentDateTime']),
       status: json['status'],
       paymentStatus: json['paymentStatus'],
+      isPaid: json['isPaid'] == true || json['paymentStatus'] == 'Paid',
       notes: json['notes'],
+      cancellationReason: json['cancellationReason'],
       service: json['service'] != null ? Service.fromJson(json['service']) : null,
       barber: json['barber'] != null ? Barber.fromJson(json['barber']) : null,
       user: json['user'] != null ? User.fromJson(json['user']) : null,
       salon: json['salon'] != null ? Salon.fromJson(json['salon']) : null,
     );
   }
-  
+
 
 
   Appointment copyWith({
@@ -88,7 +96,9 @@ class Appointment {
     DateTime? appointmentDateTime,
     String? status,
     String? paymentStatus,
+    bool? isPaid,
     String? notes,
+    String? cancellationReason,
     User? user,
     Barber? barber,
     Service? service,
@@ -103,7 +113,9 @@ class Appointment {
       appointmentDateTime: appointmentDateTime ?? this.appointmentDateTime,
       status: status ?? this.status,
       paymentStatus: paymentStatus ?? this.paymentStatus,
+      isPaid: isPaid ?? this.isPaid,
       notes: notes ?? this.notes,
+      cancellationReason: cancellationReason ?? this.cancellationReason,
       user: user ?? this.user,
       barber: barber ?? this.barber,
       service: service ?? this.service,

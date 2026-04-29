@@ -1,6 +1,7 @@
 using MapsterMapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using ŠišAppApi.Constants;
 using ŠišAppApi.Data;
 using ŠišAppApi.Filters;
 using ŠišAppApi.Models;
@@ -22,10 +23,22 @@ namespace ŠišAppApi.Services.Services
 
         public override async Task<IEnumerable<ServiceDto>> Get(ServiceSearchObject? search = null)
         {
-            var query = _context.Services.AsQueryable();
+            var query = _context.Services
+                .Include(s => s.Category)
+                .AsQueryable();
+
+            var page = Math.Max(1, search?.Page ?? 1);
+            var pageSize = Math.Clamp(search?.PageSize ?? 20, 1, 100);
 
             if (search != null)
             {
+                if (!string.IsNullOrWhiteSpace(search.Q))
+                {
+                    var q = search.Q.Trim().ToLower();
+                    query = query.Where(s =>
+                        s.Name.ToLower().Contains(q) ||
+                        (s.Description != null && s.Description.ToLower().Contains(q)));
+                }
                 if (search.SalonId.HasValue)
                 {
                     query = query.Where(s => s.SalonId == search.SalonId.Value);
@@ -52,20 +65,74 @@ namespace ŠišAppApi.Services.Services
                 query = query.Where(s => !s.IsDeleted);
             }
 
-            var list = await query.ToListAsync();
-            return _mapper.Map<List<ServiceDto>>(list);
+            var list = await query
+                .OrderBy(s => s.Name)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+            return list.Select(s => new ServiceDto
+            {
+                Id = s.Id,
+                SalonId = s.SalonId,
+                Name = s.Name,
+                Description = s.Description,
+                Price = s.Price,
+                DurationMinutes = s.DurationMinutes,
+                CategoryId = s.CategoryId,
+                CategoryName = s.Category?.Name,
+                CategoryDescription = s.Category?.Description,
+                IsPopular = s.IsPopular,
+                IsActive = s.IsActive
+            }).ToList();
         }
 
         public override async Task<ServiceDto> Insert(ServiceInsertRequest request)
         {
-            var entity = _mapper.Map<Service>(request);
+            if (request.DurationMinutes <= 0)
+                throw new UserException("Trajanje usluge mora biti veće od 0 minuta.");
+            if (request.Price <= 0)
+                throw new UserException("Cijena usluge mora biti veća od 0.");
+
+            var salonExists = await _context.Salons.AnyAsync(s => s.Id == request.SalonId && !s.IsDeleted);
+            if (!salonExists)
+                throw new UserException("Odabrani salon ne postoji.");
+
+            var entity = new Service
+            {
+                SalonId = request.SalonId,
+                Name = request.Name.Trim(),
+                Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
+                DurationMinutes = request.DurationMinutes,
+                Price = request.Price,
+                CategoryId = request.CategoryId,
+                IsPopular = request.IsPopular,
+                DisplayOrder = request.DisplayOrder
+            };
             entity.CreatedAt = DateTime.UtcNow;
             entity.IsActive = true;
             entity.IsDeleted = false;
 
             _context.Services.Add(entity);
             await _context.SaveChangesAsync();
-            return _mapper.Map<ServiceDto>(entity);
+
+            var created = await _context.Services
+                .Include(s => s.Category)
+                .FirstAsync(s => s.Id == entity.Id);
+
+            return new ServiceDto
+            {
+                Id = created.Id,
+                SalonId = created.SalonId,
+                Name = created.Name,
+                Description = created.Description,
+                Price = created.Price,
+                DurationMinutes = created.DurationMinutes,
+                CategoryId = created.CategoryId,
+                CategoryName = created.Category?.Name,
+                CategoryDescription = created.Category?.Description,
+                IsPopular = created.IsPopular,
+                IsActive = created.IsActive
+            };
         }
 
         public override async Task<ServiceDto> Update(int id, ServiceUpdateRequest request)
@@ -74,11 +141,41 @@ namespace ŠišAppApi.Services.Services
             if (entity == null)
                 throw new UserException("Usluga nije pronađena");
 
-            _mapper.Map(request, entity);
+            if (request.DurationMinutes <= 0)
+                throw new UserException("Trajanje usluge mora biti veće od 0 minuta.");
+            if (request.Price <= 0)
+                throw new UserException("Cijena usluge mora biti veća od 0.");
+
+
+            entity.Name = request.Name.Trim();
+            entity.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+            entity.DurationMinutes = request.DurationMinutes;
+            entity.Price = request.Price;
+            entity.CategoryId = request.CategoryId;
+            entity.IsPopular = request.IsPopular;
+            entity.DisplayOrder = request.DisplayOrder;
             entity.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
-            return _mapper.Map<ServiceDto>(entity);
+
+            var updated = await _context.Services
+                .Include(s => s.Category)
+                .FirstAsync(s => s.Id == entity.Id);
+
+            return new ServiceDto
+            {
+                Id = updated.Id,
+                SalonId = updated.SalonId,
+                Name = updated.Name,
+                Description = updated.Description,
+                Price = updated.Price,
+                DurationMinutes = updated.DurationMinutes,
+                CategoryId = updated.CategoryId,
+                CategoryName = updated.Category?.Name,
+                CategoryDescription = updated.Category?.Description,
+                IsPopular = updated.IsPopular,
+                IsActive = updated.IsActive
+            };
         }
 
         public override async Task<ServiceDto> Delete(int id)
@@ -95,14 +192,14 @@ namespace ŠišAppApi.Services.Services
             var hasActiveAppointments = await _context.Appointments
                 .AnyAsync(a => a.ServiceId == id
                     && a.AppointmentDateTime > bufferTime
-                    && (a.Status == "Pending" || a.Status == "Confirmed"));
+                    && (a.Status == AppointmentStatuses.Pending || a.Status == AppointmentStatuses.Confirmed));
 
             if (hasActiveAppointments)
             {
                 var count = await _context.Appointments
                     .CountAsync(a => a.ServiceId == id
                         && a.AppointmentDateTime > bufferTime
-                        && (a.Status == "Pending" || a.Status == "Confirmed"));
+                        && (a.Status == AppointmentStatuses.Pending || a.Status == AppointmentStatuses.Confirmed));
 
                 throw new UserException($"Ne možete obrisati uslugu koja ima {count} zakazanih termina. Prvo ih otkažite.");
             }

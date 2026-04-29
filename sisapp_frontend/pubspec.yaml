@@ -46,6 +46,10 @@ dependencies:
   printing: ^5.11.1
   pdf: ^3.10.8
   flutter_stripe: ^11.4.0
+  flutter_paypal_native: ^2.1.0
+  webview_flutter: ^4.9.0
+  signalr_netcore: ^1.4.4
+  app_links: ^7.0.0
 
 dev_dependencies:
   flutter_test:

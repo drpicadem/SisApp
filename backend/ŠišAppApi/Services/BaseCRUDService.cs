@@ -1,7 +1,8 @@
 using MapsterMapper;
 using ŠišAppApi.Data;
 using Microsoft.EntityFrameworkCore;
-using ŠišAppApi.Models; // Adjust namespace
+using ŠišAppApi.Models;
+using System.Reflection;
 
 namespace ŠišAppApi.Services
 {
@@ -37,7 +38,7 @@ namespace ŠišAppApi.Services
         public virtual async Task<IEnumerable<T>> Get(TSearch search = null)
         {
             var entity = _context.Set<TDb>().AsQueryable();
-            // Add filtering logic here if needed, usually via dynamic query or specific overrides
+
             var list = await entity.ToListAsync();
             return _mapper.Map<List<T>>(list);
         }
@@ -69,10 +70,39 @@ namespace ŠišAppApi.Services
             var entity = await _context.Set<TDb>().FindAsync(id);
             if (entity != null)
             {
-                _context.Set<TDb>().Remove(entity);
+                if (!TryApplySoftDelete(entity))
+                {
+                    _context.Set<TDb>().Remove(entity);
+                }
                 await _context.SaveChangesAsync();
             }
             return _mapper.Map<T>(entity);
+        }
+
+        private static bool TryApplySoftDelete(TDb entity)
+        {
+            var entityType = entity.GetType();
+            var isDeletedProp = entityType.GetProperty("IsDeleted", BindingFlags.Public | BindingFlags.Instance);
+            if (isDeletedProp == null || isDeletedProp.PropertyType != typeof(bool) || !isDeletedProp.CanWrite)
+            {
+                return false;
+            }
+
+            isDeletedProp.SetValue(entity, true);
+
+            var deletedAtProp = entityType.GetProperty("DeletedAt", BindingFlags.Public | BindingFlags.Instance);
+            if (deletedAtProp != null && deletedAtProp.CanWrite && deletedAtProp.PropertyType == typeof(DateTime?))
+            {
+                deletedAtProp.SetValue(entity, DateTime.UtcNow);
+            }
+
+            var isActiveProp = entityType.GetProperty("IsActive", BindingFlags.Public | BindingFlags.Instance);
+            if (isActiveProp != null && isActiveProp.CanWrite && isActiveProp.PropertyType == typeof(bool))
+            {
+                isActiveProp.SetValue(entity, false);
+            }
+
+            return true;
         }
     }
 }

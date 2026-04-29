@@ -1,7 +1,7 @@
 services:
   # SQL Server Database
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04
     container_name: sisapp-sql
     environment:
       - ACCEPT_EULA=Y
@@ -15,7 +15,7 @@ services:
 
   # RabbitMQ Message Broker
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:3.13.7-management
     container_name: sisapp-rabbitmq
     ports:
       - "5672:5672" # AMQP protocol
@@ -38,6 +38,7 @@ services:
     ports:
       - "7100:8080" # Exposed port
     environment:
+      - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=${DB_CONNECTION_STRING}
       - RabbitMQ__Host=${RABBITMQ_HOST}
       - RabbitMQ__Username=${RABBITMQ_USER}
@@ -48,9 +49,7 @@ services:
       - Jwt__ExpirationInMinutes=${JWT_EXPIRATION}
       - Stripe__SecretKey=${STRIPE_SECRET_KEY}
       - Stripe__PublishableKey=${STRIPE_PUBLISHABLE_KEY}
-      - Twilio__AccountSid=${TWILIO_ACCOUNT_SID}
-      - Twilio__AuthToken=${TWILIO_AUTH_TOKEN}
-      - Twilio__PhoneNumber=${TWILIO_PHONE_NUMBER}
+      - Cors__AllowedOrigins=${CORS_ALLOWED_ORIGINS}
       - EmailSettings__SenderEmail=${SENDER_EMAIL}
       - EmailSettings__SenderPassword=${SENDER_PASSWORD}
       - EmailSettings__SmtpServer=${SMTP_SERVER}
@@ -58,8 +57,6 @@ services:
       - PayPal__ClientId=${PAYPAL_CLIENT_ID}
       - PayPal__Secret=${PAYPAL_SECRET}
       - PayPal__BaseUrl=${PAYPAL_BASE_URL}
-    volumes:
-      - uploads_data:/app/wwwroot/uploads
     networks:
       - sisapp-network
 
@@ -89,4 +86,3 @@ networks:
 
 volumes:
   sqlvolume:
-  uploads_data:

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import 'barber_schedule_screen.dart';
-import 'barber_reviews_screen.dart';
+import '../providers/notification_provider.dart';
+import 'notifications_screen.dart';
 import 'barber/barber_dashboard_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -18,6 +18,23 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(isAdmin ? 'ŠišApp Admin Panel' : (isBarber ? 'ŠišApp Frizer Panel' : 'ŠišApp')),
         actions: [
+          Consumer<NotificationProvider>(
+            builder: (context, notificationProvider, _) {
+              return IconButton(
+                icon: Badge(
+                  isLabelVisible: notificationProvider.unreadCount > 0,
+                  label: Text(notificationProvider.unreadCount.toString()),
+                  child: Icon(Icons.notifications_outlined),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => NotificationsScreen()),
+                  );
+                },
+              );
+            },
+          ),
           IconButton(
             icon: Icon(Icons.logout),
             onPressed: () {
@@ -51,36 +68,36 @@ class HomeScreen extends StatelessWidget {
                 ],
               ),
             ),
-            
-            // --- USER MENU ---
+
+
             if (isUser) ...[
               ListTile(
                 leading: Icon(Icons.add_circle_outline),
                 title: Text('Rezervišite Termin'),
                 onTap: () {
-                  Navigator.of(context).pushNamed('/booking'); 
+                  Navigator.of(context).pushNamed('/booking');
                 },
               ),
                ListTile(
                 leading: Icon(Icons.history),
                 title: Text('Moje Rezervacije'),
                 onTap: () {
-                   // Navigate to appointments list with filter
-                   Navigator.of(context).pushNamed('/appointments'); 
+
+                   Navigator.of(context).pushNamed('/appointments');
                 },
               ),
             ],
 
-            // --- BARBER MENU REMOVED ---
-            // Barbers now use the main dashboard.
 
-            // --- ADMIN MENU ---
+
+
+
             if (isAdmin) ...[
               ListTile(
                 leading: Icon(Icons.calendar_today),
                 title: Text('Sve Rezervacije'),
                 onTap: () {
-                   Navigator.of(context).pushNamed('/appointments'); 
+                   Navigator.of(context).pushNamed('/appointments');
                 },
               ),
               ListTile(
@@ -118,19 +135,40 @@ class HomeScreen extends StatelessWidget {
                   Navigator.of(context).pushNamed('/reports');
                 },
               ),
+              ListTile(
+                leading: Icon(Icons.history_edu),
+                title: Text('Admin Logovi'),
+                onTap: () {
+                  Navigator.of(context).pushNamed('/admin-logs');
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.category),
+                title: Text('Kategorije '),
+                onTap: () {
+                  Navigator.of(context).pushNamed('/service-categories');
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.spa),
+                title: Text('Pogodnosti '),
+                onTap: () {
+                  Navigator.of(context).pushNamed('/salon-amenities');
+                },
+              ),
             ],
           ],
         ),
       ),
-      body: isBarber 
+      body: isBarber
         ? BarberDashboardScreen()
         : Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  isUser ? Icons.person : Icons.admin_panel_settings, 
-                  size: 80, 
+                  isUser ? Icons.person : Icons.admin_panel_settings,
+                  size: 80,
                   color: Colors.blue
                 ),
                 SizedBox(height: 20),

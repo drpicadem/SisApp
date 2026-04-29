@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/image_service.dart';
 
-/// Reusable widget that loads and displays the first image for an entity.
-/// Falls back to a placeholder icon if no image is found.
+
+
 class EntityImage extends StatefulWidget {
   final String entityType;
   final int entityId;
@@ -45,23 +45,63 @@ class _EntityImageState extends State<EntityImage> {
     _loadImage();
   }
 
+  @override
+  void didUpdateWidget(covariant EntityImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _loadImage();
+  }
+
   Future<void> _loadImage() async {
     try {
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+        });
+      }
       final images = await ImageService.getEntityImages(
         widget.entityType,
         widget.entityId,
         widget.token,
       );
       if (mounted && images.isNotEmpty) {
+        images.sort((a, b) {
+          DateTime parseCreatedAt(Map<String, dynamic> image) {
+            final raw = image['createdAt']?.toString();
+            if (raw == null) return DateTime.fromMillisecondsSinceEpoch(0);
+            return DateTime.tryParse(raw) ?? DateTime.fromMillisecondsSinceEpoch(0);
+          }
+
+          final byCreated = parseCreatedAt(b).compareTo(parseCreatedAt(a));
+          if (byCreated != 0) return byCreated;
+
+          final aOrder = (a['displayOrder'] as num?)?.toInt() ?? 0;
+          final bOrder = (b['displayOrder'] as num?)?.toInt() ?? 0;
+          return bOrder.compareTo(aOrder);
+        });
+
+        final latest = images.first;
+        final imageId = latest['id']?.toString() ?? '';
         setState(() {
-          _imageUrl = ImageService.getFullImageUrl(images.first['url']);
+          _imageUrl = imageId.isNotEmpty
+              ? '${ImageService.getProtectedImageUrl(imageId)}?v=$imageId'
+              : null;
           _isLoading = false;
         });
       } else {
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() {
+            _imageUrl = null;
+            _isLoading = false;
+          });
+        }
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      debugPrint('EntityImage ERROR [${widget.entityType}/${widget.entityId}]: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -71,7 +111,12 @@ class _EntityImageState extends State<EntityImage> {
       return CircleAvatar(
         radius: widget.circularRadius ?? 30,
         backgroundColor: Colors.grey[300],
-        backgroundImage: _imageUrl != null ? NetworkImage(_imageUrl!) : null,
+        backgroundImage: _imageUrl != null
+            ? NetworkImage(
+                _imageUrl!,
+                headers: {'Authorization': 'Bearer ${widget.token}'},
+              )
+            : null,
         child: _imageUrl == null
             ? (_isLoading
                 ? SizedBox(
@@ -98,6 +143,7 @@ class _EntityImageState extends State<EntityImage> {
         child: _imageUrl != null
             ? Image.network(
                 _imageUrl!,
+                headers: {'Authorization': 'Bearer ${widget.token}'},
                 fit: widget.fit,
                 width: widget.width,
                 height: widget.height,

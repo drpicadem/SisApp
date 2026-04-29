@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:image_picker/image_picker.dart';
 import '../providers/barber_provider.dart';
 import '../providers/salon_provider.dart';
 import '../providers/auth_provider.dart';
@@ -11,7 +10,10 @@ import '../models/salon.dart';
 import '../models/service.dart';
 import '../services/api_service.dart';
 import '../services/image_service.dart';
+import '../utils/form_validators.dart';
+import '../utils/error_mapper.dart';
 import '../widgets/entity_image.dart';
+import '../widgets/image_picker_widget.dart';
 
 class BarbersScreen extends StatefulWidget {
   @override
@@ -20,28 +22,30 @@ class BarbersScreen extends StatefulWidget {
 
 class _BarbersScreenState extends State<BarbersScreen> {
   Salon? _selectedSalon;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final authProvider = context.read<AuthProvider>();
-      
+
       if (authProvider.isBarber) {
         final barberProvider = context.read<BarberProvider>();
         await barberProvider.loadMyBarberProfile();
-        
+
         if (barberProvider.myBarberProfile != null) {
           final salonId = barberProvider.myBarberProfile!.salonId;
           setState(() {
             _selectedSalon = Salon(
-              id: salonId, 
-              name: 'Moj Salon', 
-              address: '', 
+              id: salonId,
+              name: 'Moj Salon',
+              cityId: 0,
+              address: '',
               city: '',
               phone: '',
               postalCode: '',
-              country: '',
             );
           });
           context.read<BarberProvider>().loadBarbers(salonId);
@@ -54,6 +58,12 @@ class _BarbersScreenState extends State<BarbersScreen> {
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -61,11 +71,11 @@ class _BarbersScreenState extends State<BarbersScreen> {
       ),
       body: Column(
         children: [
-          // Filter Section
+
           Consumer<AuthProvider>(
             builder: (context, authProvider, _) {
               if (authProvider.isBarber) {
-                return SizedBox.shrink(); // Hide dropdown for barbers
+                return SizedBox.shrink();
               }
 
               return Padding(
@@ -73,7 +83,7 @@ class _BarbersScreenState extends State<BarbersScreen> {
                 child: Consumer<SalonProvider>(
                   builder: (context, salonProvider, child) {
                     if (salonProvider.isLoading) return LinearProgressIndicator();
-                    
+
                     return DropdownButtonFormField<Salon>(
                       value: _selectedSalon,
                       decoration: InputDecoration(
@@ -102,8 +112,38 @@ class _BarbersScreenState extends State<BarbersScreen> {
               );
             }
           ),
-          
-          // List Section
+
+
+          if (_selectedSalon != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value.trim().toLowerCase();
+                  });
+                },
+                decoration: InputDecoration(
+                  labelText: 'Pretraga uposlenika',
+                  hintText: 'Ime, prezime ili email',
+                  prefixIcon: Icon(Icons.search),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(Icons.clear),
+                          tooltip: 'Očisti pretragu',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _searchQuery = '';
+                            });
+                          },
+                        )
+                      : null,
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
           Expanded(
             child: Consumer<BarberProvider>(
               builder: (context, provider, child) {
@@ -125,14 +165,24 @@ class _BarbersScreenState extends State<BarbersScreen> {
                   return Center(child: CircularProgressIndicator());
                 }
 
-                if (provider.barbers.isEmpty) {
+                final filteredBarbers = provider.barbers.where((barber) {
+                  if (_searchQuery.isEmpty) return true;
+                  final fullName =
+                      '${barber.firstName} ${barber.lastName}'.toLowerCase();
+                  return fullName.contains(_searchQuery) ||
+                      barber.email.toLowerCase().contains(_searchQuery);
+                }).toList();
+
+                if (filteredBarbers.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.person_off, size: 64, color: Colors.grey[300]),
                         SizedBox(height: 16),
-                        Text('Nema dodanih frizera u ovom salonu.',
+                        Text(_searchQuery.isEmpty
+                                ? 'Nema dodanih frizera u ovom salonu.'
+                                : 'Nema rezultata za zadanu pretragu.',
                             style: TextStyle(color: Colors.grey[500], fontSize: 16)),
                       ],
                     ),
@@ -141,9 +191,9 @@ class _BarbersScreenState extends State<BarbersScreen> {
 
                 return ListView.builder(
                   padding: EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: provider.barbers.length,
+                  itemCount: filteredBarbers.length,
                   itemBuilder: (context, index) {
-                    final barber = provider.barbers[index];
+                    final barber = filteredBarbers[index];
                     return _buildBarberCard(barber);
                   },
                 );
@@ -244,7 +294,7 @@ class _BarbersScreenState extends State<BarbersScreen> {
 
     final apiService = ApiService();
 
-    // Load barber's current services and salon services
+
     final barberServices = await apiService.getBarberServices(barber.id, token);
     final assignedServiceIds = barberServices.map((s) => s['serviceId'] as int).toSet();
 
@@ -258,7 +308,7 @@ class _BarbersScreenState extends State<BarbersScreen> {
       return;
     }
 
-    // Create a mutable copy of assigned ids for the dialog
+
     final selectedIds = Set<int>.from(assignedServiceIds);
 
     if (!mounted) return;
@@ -269,7 +319,16 @@ class _BarbersScreenState extends State<BarbersScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text('Usluge za ${barber.firstName} ${barber.lastName}'),
+              title: Row(
+                children: [
+                  Expanded(child: Text('Usluge za ${barber.firstName} ${barber.lastName}')),
+                  IconButton(
+                    tooltip: 'Zatvori formu',
+                    onPressed: () => Navigator.pop(dialogContext),
+                    icon: Icon(Icons.close),
+                  ),
+                ],
+              ),
               content: SizedBox(
                 width: double.maxFinite,
                 child: ListView.builder(
@@ -309,7 +368,13 @@ class _BarbersScreenState extends State<BarbersScreen> {
                     );
                     if (mounted) {
                       ScaffoldMessenger.of(this.context).showSnackBar(
-                        SnackBar(content: Text(success ? 'Usluge ažurirane!' : 'Greška pri ažuriranju.')),
+                        SnackBar(
+                          content: Text(
+                            success
+                                ? 'Dodijeljene usluge za uposlenika "${barber.firstName} ${barber.lastName}" su uspješno ažurirane.'
+                                : 'Ažuriranje usluga nije uspjelo. Provjerite izbor usluga i pokušajte ponovo.',
+                          ),
+                        ),
                       );
                     }
                   },
@@ -332,9 +397,9 @@ class _BarbersScreenState extends State<BarbersScreen> {
     final _bioController = TextEditingController();
     final _formKey = GlobalKey<FormState>();
     File? _selectedImage;
-    final _picker = ImagePicker();
-    
-    // Default to currently selected salon if available
+    bool _showPassword = false;
+
+
     Salon? _dialogSelectedSalon = _selectedSalon;
 
     showDialog(
@@ -343,54 +408,41 @@ class _BarbersScreenState extends State<BarbersScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text('Novi Uposlenik'),
+              title: Row(
+                children: [
+                  Expanded(child: Text('Novi Uposlenik')),
+                  IconButton(
+                    tooltip: 'Zatvori formu',
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(Icons.close),
+                  ),
+                ],
+              ),
               content: SingleChildScrollView(
                 child: Form(
                   key: _formKey,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Image picker
-                      GestureDetector(
-                        onTap: () async {
-                          final XFile? pickedFile = await _picker.pickImage(
-                            source: ImageSource.gallery,
-                            maxWidth: 1024,
-                            maxHeight: 1024,
-                            imageQuality: 85,
-                          );
-                          if (pickedFile != null) {
-                            setDialogState(() {
-                              _selectedImage = File(pickedFile.path);
-                            });
-                          }
+
+                      ImagePickerWidget(
+                        token: context.read<AuthProvider>().tokenResponse?.token,
+                        imageType: 'barber',
+                        deferUpload: true,
+                        onFileSelected: (file) {
+                          setDialogState(() {
+                            _selectedImage = file;
+                          });
                         },
-                        child: CircleAvatar(
-                          radius: 50,
-                          backgroundColor: Colors.grey[300],
-                          backgroundImage: _selectedImage != null
-                              ? FileImage(_selectedImage!)
-                              : null,
-                          child: _selectedImage == null
-                              ? Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.add_a_photo, size: 28, color: Colors.grey[600]),
-                                    SizedBox(height: 4),
-                                    Text('Slika', style: TextStyle(fontSize: 10, color: Colors.grey[600])),
-                                  ],
-                                )
-                              : null,
-                        ),
                       ),
                       SizedBox(height: 16),
                        Consumer<SalonProvider>(
                         builder: (context, salonProvider, _) {
                           final authProvider = context.read<AuthProvider>();
                           if (authProvider.isBarber) {
-                            return SizedBox.shrink(); // Hide dropdown for barbers
+                            return SizedBox.shrink();
                           }
-                          
+
                           return DropdownButtonFormField<Salon>(
                             value: _dialogSelectedSalon,
                             decoration: InputDecoration(labelText: 'Salon'),
@@ -412,32 +464,37 @@ class _BarbersScreenState extends State<BarbersScreen> {
                       TextFormField(
                         controller: _firstNameController,
                         decoration: InputDecoration(labelText: 'Ime'),
-                        validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                        validator: FormValidators.personName,
                       ),
                       TextFormField(
                         controller: _lastNameController,
                         decoration: InputDecoration(labelText: 'Prezime'),
-                        validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                        validator: FormValidators.personName,
                       ),
                       TextFormField(
                         controller: _usernameController,
                         decoration: InputDecoration(labelText: 'Korisničko ime'),
-                        validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                        validator: FormValidators.username,
                       ),
                       TextFormField(
                         controller: _emailController,
                         decoration: InputDecoration(labelText: 'Email'),
-                        validator: (v) {
-                          if (v == null || v.isEmpty) return 'Obavezno';
-                          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v)) return 'Neispravan email format';
-                          return null;
-                        },
+                        validator: FormValidators.email,
                       ),
                       TextFormField(
                         controller: _passwordController,
-                        decoration: InputDecoration(labelText: 'Lozinka'),
-                        obscureText: true,
-                        validator: (v) => v!.length < 6 ? 'Min 6 znakova' : null,
+                        obscureText: !_showPassword,
+                        decoration: InputDecoration(labelText: 'Lozinka').copyWith(
+                          suffixIcon: IconButton(
+                            icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
+                            onPressed: () {
+                              setDialogState(() {
+                                _showPassword = !_showPassword;
+                              });
+                            },
+                          ),
+                        ),
+                        validator: FormValidators.password,
                       ),
                        TextFormField(
                         controller: _bioController,
@@ -466,11 +523,11 @@ class _BarbersScreenState extends State<BarbersScreen> {
                       );
 
                       final createdId = await context.read<BarberProvider>().addBarber(dto);
-                      
+
                       if (!context.mounted) return;
 
                       if (createdId != null) {
-                        // Upload image if selected
+
                         if (_selectedImage != null) {
                           final token = context.read<AuthProvider>().tokenResponse?.token;
                           if (token != null) {
@@ -483,15 +540,27 @@ class _BarbersScreenState extends State<BarbersScreen> {
                             );
                           }
                         }
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Uposlenik dodan!')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Uposlenik "${_firstNameController.text.trim()} ${_lastNameController.text.trim()}" je dodan u salon "${_dialogSelectedSalon!.name}".',
+                            ),
+                          ),
+                        );
                          Navigator.pop(context);
-                         
-                         // Refresh list if added to current view
+
+
                          if (_selectedSalon?.id == _dialogSelectedSalon?.id) {
                            this.context.read<BarberProvider>().loadBarbers(_selectedSalon!.id);
                          }
                       } else {
-                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Neuspješno dodavanje uposlenika. Provjerite podatke.')));
+                         ScaffoldMessenger.of(context).showSnackBar(
+                           SnackBar(
+                             content: Text(
+                               'Dodavanje nije uspjelo. Provjerite: korisničko ime (3-30, bez razmaka), email format, lozinka (4-100).',
+                             ),
+                           ),
+                         );
                       }
                     }
                   },
@@ -511,11 +580,13 @@ class _BarbersScreenState extends State<BarbersScreen> {
     final _usernameController = TextEditingController(text: barber.username);
     final _emailController = TextEditingController(text: barber.email);
     final _passwordController = TextEditingController();
+    final _confirmPasswordController = TextEditingController();
     final _bioController = TextEditingController(text: barber.bio);
     final _formKey = GlobalKey<FormState>();
     File? _selectedImage;
-    final _picker = ImagePicker();
-    
+    bool _showNewPassword = false;
+    bool _showConfirmPassword = false;
+
     bool isDirty = false;
 
     showDialog(
@@ -529,6 +600,7 @@ class _BarbersScreenState extends State<BarbersScreen> {
                   _usernameController.text != barber.username ||
                   _emailController.text != barber.email ||
                   _passwordController.text.isNotEmpty ||
+                  _confirmPasswordController.text.isNotEmpty ||
                   _bioController.text != barber.bio ||
                   _selectedImage != null;
               if (dirty != isDirty) {
@@ -539,7 +611,16 @@ class _BarbersScreenState extends State<BarbersScreen> {
             }
 
             return AlertDialog(
-              title: Text('Uredi Uposlenika'),
+              title: Row(
+                children: [
+                  Expanded(child: Text('Uredi Uposlenika')),
+                  IconButton(
+                    tooltip: 'Zatvori formu',
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(Icons.close),
+                  ),
+                ],
+              ),
               content: SingleChildScrollView(
                 child: Form(
                   key: _formKey,
@@ -547,63 +628,81 @@ class _BarbersScreenState extends State<BarbersScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      GestureDetector(
-                        onTap: () async {
-                          final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
-                          if (pickedFile != null) {
-                            setDialogState(() {
-                              _selectedImage = File(pickedFile.path);
-                              checkDirty();
-                            });
-                          }
+                      ImagePickerWidget(
+                        token: context.read<AuthProvider>().tokenResponse?.token,
+                        imageType: 'barber',
+                        deferUpload: true,
+                        isCircular: true,
+                        size: 100,
+                        currentImageUrl: null,
+                        onFileSelected: (file) {
+                          setDialogState(() {
+                            _selectedImage = file;
+                            checkDirty();
+                          });
                         },
-                        child: CircleAvatar(
-                          radius: 50,
-                          backgroundColor: Colors.grey[300],
-                          backgroundImage: _selectedImage != null ? FileImage(_selectedImage!) : null,
-                          child: _selectedImage == null
-                              ? EntityImage(
-                                  entityType: 'Barber',
-                                  entityId: barber.id,
-                                  token: context.read<AuthProvider>().tokenResponse?.token ?? '',
-                                  isCircular: true,
-                                  circularRadius: 50,
-                                  placeholderIcon: Icons.add_a_photo,
-                                  placeholderIconSize: 28,
-                                )
-                              : null,
-                        ),
                       ),
                       SizedBox(height: 16),
                       TextFormField(
                         controller: _firstNameController,
                         decoration: InputDecoration(labelText: 'Ime'),
-                        validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                        validator: FormValidators.personName,
                       ),
                       TextFormField(
                         controller: _lastNameController,
                         decoration: InputDecoration(labelText: 'Prezime'),
-                        validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                        validator: FormValidators.personName,
                       ),
                       TextFormField(
                         controller: _usernameController,
                         decoration: InputDecoration(labelText: 'Korisničko ime'),
-                        validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                        validator: FormValidators.username,
                       ),
                       TextFormField(
                         controller: _emailController,
                         decoration: InputDecoration(labelText: 'Email'),
-                        validator: (v) {
-                          if (v == null || v.isEmpty) return 'Obavezno';
-                          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v)) return 'Neispravan email format';
-                          return null;
-                        },
+                        validator: FormValidators.email,
                       ),
                       TextFormField(
                         controller: _passwordController,
-                        decoration: InputDecoration(labelText: 'Nova lozinka (opcionalno)'),
-                        obscureText: true,
-                        validator: (v) => v!.isNotEmpty && v.length < 6 ? 'Min 6 znakova' : null,
+                        obscureText: !_showNewPassword,
+                        decoration: InputDecoration(labelText: 'Nova lozinka (opcionalno)').copyWith(
+                          suffixIcon: IconButton(
+                            icon: Icon(_showNewPassword ? Icons.visibility_off : Icons.visibility),
+                            onPressed: () {
+                              setDialogState(() {
+                                _showNewPassword = !_showNewPassword;
+                              });
+                            },
+                          ),
+                        ),
+                        validator: (v) => FormValidators.password(v, optional: true),
+                      ),
+                      TextFormField(
+                        controller: _confirmPasswordController,
+                        obscureText: !_showConfirmPassword,
+                        decoration: InputDecoration(labelText: 'Potvrdi novu lozinku').copyWith(
+                          suffixIcon: IconButton(
+                            icon: Icon(_showConfirmPassword ? Icons.visibility_off : Icons.visibility),
+                            onPressed: () {
+                              setDialogState(() {
+                                _showConfirmPassword = !_showConfirmPassword;
+                              });
+                            },
+                          ),
+                        ),
+                        validator: (value) {
+                          if (_passwordController.text.trim().isEmpty &&
+                              (value == null || value.trim().isEmpty)) {
+                            return null;
+                          }
+                          final base = FormValidators.password(value, optional: true);
+                          if (base != null) return base;
+                          if ((value ?? '') != _passwordController.text) {
+                            return 'Potvrda lozinke mora biti ista kao nova lozinka';
+                          }
+                          return null;
+                        },
                       ),
                       TextFormField(
                         controller: _bioController,
@@ -632,7 +731,7 @@ class _BarbersScreenState extends State<BarbersScreen> {
 
                       try {
                         final success = await context.read<BarberProvider>().updateBarber(barber.id, dto);
-                        
+
                         if (!context.mounted) return;
 
                         if (success) {
@@ -651,14 +750,26 @@ class _BarbersScreenState extends State<BarbersScreen> {
                               }
                             }
                           }
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Uposlenik uspješno ažuriran!')));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Podaci uposlenika "${_firstNameController.text.trim()} ${_lastNameController.text.trim()}" su uspješno ažurirani.',
+                              ),
+                            ),
+                          );
                           Navigator.pop(context);
                         } else {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Neuspješno ažuriranje uposlenika.')));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Ažuriranje nije uspjelo. Provjerite: korisničko ime (3-30), email format, nova lozinka (4-100) ako je unesena.',
+                              ),
+                            ),
+                          );
                         }
                       } catch (e) {
                          ScaffoldMessenger.of(context).showSnackBar(
-                           SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))
+                           SnackBar(content: Text(ErrorMapper.toUserMessage(e)))
                          );
                       }
                     }

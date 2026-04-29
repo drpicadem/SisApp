@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../providers/auth_provider.dart';
 import '../services/image_service.dart';
+import '../utils/form_validators.dart';
 
 class RegisterScreen extends StatefulWidget {
   @override
@@ -21,6 +22,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
   File? _selectedImage;
   final _picker = ImagePicker();
+  bool _showPassword = false;
+  bool _showConfirmPassword = false;
 
   @override
   void dispose() {
@@ -55,7 +58,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 textAlign: TextAlign.center,
               ),
               SizedBox(height: 16),
-              // Profile image picker
+
               Center(
                 child: GestureDetector(
                   onTap: _pickImage,
@@ -101,11 +104,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.person),
                 ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'Unesite korisničko ime';
-                  if (value.length < 3) return 'Minimalno 3 karaktera';
-                  return null;
-                },
+                validator: FormValidators.username,
               ),
               SizedBox(height: 12),
               Row(
@@ -118,8 +117,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         border: OutlineInputBorder(),
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) return 'Unesite ime';
-                        return null;
+                        return FormValidators.personName(value);
                       },
                     ),
                   ),
@@ -132,8 +130,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         border: OutlineInputBorder(),
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) return 'Unesite prezime';
-                        return null;
+                        return FormValidators.personName(value);
                       },
                     ),
                   ),
@@ -148,12 +145,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   prefixIcon: Icon(Icons.email),
                 ),
                 keyboardType: TextInputType.emailAddress,
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'Unesite email';
-                  final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-                  if (!emailRegex.hasMatch(value)) return 'Neispravan email format';
-                  return null;
-                },
+                validator: FormValidators.email,
               ),
               SizedBox(height: 12),
               TextFormField(
@@ -164,12 +156,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   prefixIcon: Icon(Icons.phone),
                 ),
                 keyboardType: TextInputType.phone,
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'Unesite broj telefona';
-                  final phoneRegex = RegExp(r'^\+?[\d\s\-]{8,15}$');
-                  if (!phoneRegex.hasMatch(value)) return 'Unesite validan broj telefona (npr. +387 61 123-456)';
-                  return null;
-                },
+                validator: FormValidators.phone,
               ),
               SizedBox(height: 12),
               TextFormField(
@@ -178,13 +165,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   labelText: 'Lozinka',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.lock),
+                  suffixIcon: IconButton(
+                    icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () {
+                      setState(() {
+                        _showPassword = !_showPassword;
+                      });
+                    },
+                  ),
                 ),
-                obscureText: true,
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'Unesite lozinku';
-                  if (value.length < 6) return 'Minimalno 6 karaktera';
-                  return null;
-                },
+                obscureText: !_showPassword,
+                validator: FormValidators.password,
               ),
               SizedBox(height: 12),
               TextFormField(
@@ -193,11 +184,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   labelText: 'Potvrdite lozinku',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(
+                    icon: Icon(_showConfirmPassword ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () {
+                      setState(() {
+                        _showConfirmPassword = !_showConfirmPassword;
+                      });
+                    },
+                  ),
                 ),
-                obscureText: true,
+                obscureText: !_showConfirmPassword,
                 validator: (value) {
-                  if (value == null || value.isEmpty) return 'Potvrdite lozinku';
-                  if (value != _passwordController.text) return 'Lozinke se ne podudaraju';
+                  final base = FormValidators.password(value);
+                  if (base != null) return base;
+                  if (value != _passwordController.text) {
+                    return 'Potvrda lozinke mora biti ista kao lozinka';
+                  }
                   return null;
                 },
               ),
@@ -262,14 +264,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
 
       if (error == null) {
-        // Upload profile image if selected
-        if (_selectedImage != null && auth.tokenResponse?.token != null && auth.userId != null) {
-          await ImageService.uploadImage(
+
+        if (_selectedImage != null && auth.tokenResponse?.token != null) {
+          await ImageService.uploadMyProfileImage(
             _selectedImage!,
             auth.tokenResponse!.token,
-            imageType: 'profile',
-            entityId: auth.userId,
-            entityType: 'User',
           );
         }
         Navigator.pushReplacementNamed(context, '/customer-home');

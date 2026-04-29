@@ -13,7 +13,6 @@ public class ApplicationDbContext : DbContext
     public DbSet<User> Users { get; set; }
     public DbSet<Barber> Barbers { get; set; }
     public DbSet<Salon> Salons { get; set; }
-    public DbSet<Employee> Employees { get; set; }
     public DbSet<Service> Services { get; set; }
     public DbSet<ServiceCategory> ServiceCategories { get; set; }
     public DbSet<Appointment> Appointments { get; set; }
@@ -25,18 +24,18 @@ public class ApplicationDbContext : DbContext
     public DbSet<RefreshToken> RefreshTokens { get; set; }
     public DbSet<Admin> Admins { get; set; }
     public DbSet<AdminLog> AdminLogs { get; set; }
-    public DbSet<UserPreferences> UserPreferences { get; set; }
     public DbSet<Image> Images { get; set; }
     public DbSet<SalonAmenity> SalonAmenities { get; set; }
     public DbSet<BarberSpecialty> BarberSpecialties { get; set; }
     public DbSet<Customer> Customers { get; set; }
     public DbSet<FavoriteSalon> FavoriteSalons { get; set; }
+    public DbSet<City> Cities { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
-        // Unique constraints
+
         modelBuilder.Entity<User>()
             .HasIndex(u => u.Email)
             .IsUnique();
@@ -44,7 +43,7 @@ public class ApplicationDbContext : DbContext
             .HasIndex(u => u.Username)
             .IsUnique();
 
-        // 1:1 Relationships (User -> Roles)
+
         modelBuilder.Entity<User>()
             .HasOne(u => u.Barber)
             .WithOne(b => b.User)
@@ -63,7 +62,7 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey<Customer>(c => c.UserId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Decimal precision
+
         modelBuilder.Entity<Payment>()
             .Property(p => p.Amount)
             .HasPrecision(10, 2);
@@ -71,7 +70,7 @@ public class ApplicationDbContext : DbContext
             .Property(s => s.Price)
             .HasPrecision(10, 2);
 
-        // Appointment relacije - sve na Restrict
+
         modelBuilder.Entity<Appointment>()
             .HasOne(a => a.User)
             .WithMany(u => u.Appointments)
@@ -92,7 +91,12 @@ public class ApplicationDbContext : DbContext
             .WithMany(s => s.Appointments)
             .HasForeignKey(a => a.SalonId)
             .OnDelete(DeleteBehavior.Restrict);
-        // 1:1 Payment i Review
+
+        modelBuilder.Entity<Appointment>()
+            .HasIndex(a => new { a.UserId, a.ServiceId, a.AppointmentDateTime })
+            .IsUnique()
+            .HasFilter("[Status] <> 'Cancelled'");
+
         modelBuilder.Entity<Appointment>()
             .HasOne(a => a.Payment)
             .WithOne(p => p.Appointment)
@@ -104,7 +108,7 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey<Review>(r => r.AppointmentId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Review relacije - sve na Restrict
+
         modelBuilder.Entity<Review>()
             .HasOne(r => r.User)
             .WithMany(u => u.Reviews)
@@ -126,7 +130,7 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey(r => r.CustomerId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // BarberSpecialties konfiguracija
+
         modelBuilder.Entity<BarberSpecialty>()
             .HasOne(bs => bs.Barber)
             .WithMany(b => b.Specialties)
@@ -137,6 +141,16 @@ public class ApplicationDbContext : DbContext
             .WithMany(s => s.BarberSpecialties)
             .HasForeignKey(bs => bs.ServiceId)
             .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<City>()
+            .HasIndex(c => c.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<Salon>()
+            .HasOne(s => s.CityRef)
+            .WithMany(c => c.Salons)
+            .HasForeignKey(s => s.CityId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<User>().HasQueryFilter(u => !u.IsDeleted);
     }

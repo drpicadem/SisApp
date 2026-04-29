@@ -8,5 +8,6 @@ namespace ŠišAppApi.Services.Interfaces
     {
         Task<UserDto> UpdateProfileImageAsync(int userId, string imageId);
         Task<UserDto> RestoreUser(int id);
+        Task SetPasswordByAdmin(int id, string newPassword, string confirmPassword);
     }
 }

@@ -5,6 +5,7 @@ using ŠišAppApi.Models.Requests;
 using ŠišAppApi.Models.SearchObjects;
 using ŠišAppApi.Services;
 using ŠišAppApi.Filters;
+using ŠišAppApi.Services.Interfaces;
 
 using ŠišAppApi.Models.DTOs;
 
@@ -15,7 +16,7 @@ namespace ŠišAppApi.Controllers
     {
         private readonly IAppointmentService _appointmentService;
 
-        public AppointmentsController(IAppointmentService service) : base(service)
+        public AppointmentsController(IAppointmentService service, ICurrentUserService currentUser) : base(service, currentUser)
         {
             _appointmentService = service;
         }
@@ -23,9 +24,9 @@ namespace ŠišAppApi.Controllers
         [HttpGet]
         public override async Task<ActionResult<IEnumerable<AppointmentDto>>> Get([FromQuery] AppointmentSearchObject search)
         {
-            // Inject Security Context
+
             search.CurrentUserId = GetUserId();
-            search.CurrentUserRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            search.CurrentUserRole = GetUserRole();
 
             return await base.Get(search);
         }
@@ -41,12 +42,15 @@ namespace ŠišAppApi.Controllers
             }
             catch (UserException ex)
             {
-                return BadRequest(ex.Message);
+                return BadRequest(new
+                {
+                    code = "BUSINESS_RULE_VIOLATION",
+                    userError = ex.Message
+                });
             }
         }
 
         [HttpGet("available-slots")]
-        [AllowAnonymous]
         public async Task<ActionResult<IEnumerable<string>>> GetAvailableSlots(int barberId, DateOnly date, int? serviceId = null)
         {
             var slots = await _appointmentService.GetAvailableSlots(barberId, date, serviceId);
@@ -54,9 +58,9 @@ namespace ŠišAppApi.Controllers
         }
 
         [HttpPut("{id}/cancel")]
-        public async Task<ActionResult<AppointmentDto>> Cancel(int id)
+    public async Task<ActionResult<AppointmentDto>> Cancel(int id, [FromBody] AppointmentCancelRequest? request = null)
         {
-            var result = await _appointmentService.Cancel(id, GetUserId(), GetUserRole());
+            var result = await _appointmentService.Cancel(id, GetUserId(), GetUserRole(), request?.Reason);
             return Ok(result);
         }
     }

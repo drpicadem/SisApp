@@ -1,5 +1,5 @@
-using System.Net;
-using System.Net.Mail;
+using MassTransit;
+using ŠišApp.Contracts;
 
 namespace ŠišAppApi.Services
 {
@@ -10,12 +10,12 @@ namespace ŠišAppApi.Services
 
     public class EmailService : IEmailService
     {
-        private readonly IConfiguration _configuration;
+        private readonly IPublishEndpoint _publishEndpoint;
         private readonly ILogger<EmailService> _logger;
 
-        public EmailService(IConfiguration configuration, ILogger<EmailService> logger)
+        public EmailService(IPublishEndpoint publishEndpoint, ILogger<EmailService> logger)
         {
-            _configuration = configuration;
+            _publishEndpoint = publishEndpoint;
             _logger = logger;
         }
 
@@ -23,38 +23,25 @@ namespace ŠišAppApi.Services
         {
             try
             {
-                var smtpServer = _configuration["EmailSettings:SmtpServer"];
-                var smtpPort = int.Parse(_configuration["EmailSettings:SmtpPort"] ?? "587");
-                var senderEmail = _configuration["EmailSettings:SenderEmail"];
-                var senderPassword = _configuration["EmailSettings:SenderPassword"];
-
-                if (string.IsNullOrEmpty(smtpServer) || string.IsNullOrEmpty(senderEmail))
+                if (string.IsNullOrWhiteSpace(toEmail))
                 {
-                    _logger.LogWarning("Email settings are not configured. Skipping email.");
+                    _logger.LogWarning("Skipping email publish because recipient is empty.");
                     return;
                 }
 
-                using var client = new SmtpClient(smtpServer, smtpPort)
+                var message = new SendEmailEvent
                 {
-                    Credentials = new NetworkCredential(senderEmail, senderPassword),
-                    EnableSsl = true
-                };
-
-                var mailMessage = new MailMessage
-                {
-                    From = new MailAddress(senderEmail, "ŠišApp"),
+                    ToEmail = toEmail,
                     Subject = subject,
-                    Body = body,
-                    IsBodyHtml = true,
+                    Body = body
                 };
-                mailMessage.To.Add(toEmail);
 
-                await client.SendMailAsync(mailMessage);
-                _logger.LogInformation($"Email sent successfully to {toEmail}");
+                await _publishEndpoint.Publish(message);
+                _logger.LogInformation("Email event published to RabbitMQ for {ToEmail}", toEmail);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error sending email to {toEmail}");
+                _logger.LogError(ex, "Error publishing email event for {ToEmail}", toEmail);
             }
         }
     }

@@ -8,22 +8,26 @@ class BarberProvider extends ChangeNotifier {
   Barber? _myBarberProfile;
   bool _isLoading = false;
   final ApiService _apiService = ApiService();
-  final AuthProvider? _authProvider;
+  AuthProvider? _authProvider;
 
   BarberProvider(this._authProvider);
+
+  void updateAuthProvider(AuthProvider? authProvider) {
+    _authProvider = authProvider;
+  }
 
   List<Barber> get barbers => _barbers;
   Barber? get myBarberProfile => _myBarberProfile;
   bool get isLoading => _isLoading;
 
-  Future<void> loadBarbers(int salonId) async {
+  Future<void> loadBarbers(int salonId, {int? serviceId}) async {
     if (_authProvider?.tokenResponse == null) return;
-    
+
     _isLoading = true;
     notifyListeners();
 
     try {
-      _barbers = await _apiService.getBarbers(salonId, _authProvider!.tokenResponse!.token);
+      _barbers = await _apiService.getBarbers(salonId, _authProvider!.tokenResponse!.token, serviceId: serviceId);
     } catch (e) {
       print('Error loading barbers: $e');
     }
@@ -34,7 +38,7 @@ class BarberProvider extends ChangeNotifier {
 
   Future<void> loadMyBarberProfile() async {
     if (_authProvider?.tokenResponse == null) return;
-    
+
     _isLoading = true;
     notifyListeners();
 
@@ -55,7 +59,7 @@ class BarberProvider extends ChangeNotifier {
     notifyListeners();
 
     int? createdId = await _apiService.createBarber(dto, _authProvider!.tokenResponse!.token);
-    
+
     if (createdId != null) {
       await loadBarbers(dto.salonId);
     }

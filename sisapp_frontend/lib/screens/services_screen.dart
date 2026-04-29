@@ -4,8 +4,11 @@ import '../providers/service_provider.dart';
 import '../providers/salon_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/barber_provider.dart';
+import '../providers/service_category_provider.dart';
 import '../models/service.dart';
 import '../models/salon.dart';
+import '../utils/form_validators.dart';
+import '../utils/error_mapper.dart';
 
 class ServicesScreen extends StatefulWidget {
   @override
@@ -14,28 +17,30 @@ class ServicesScreen extends StatefulWidget {
 
 class _ServicesScreenState extends State<ServicesScreen> {
   Salon? _selectedSalon;
+  String _searchQuery = '';
+  bool? _isActiveFilter;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final authProvider = context.read<AuthProvider>();
-      
+
       if (authProvider.isBarber) {
         final barberProvider = context.read<BarberProvider>();
         await barberProvider.loadMyBarberProfile();
         if (barberProvider.myBarberProfile != null) {
           final salonId = barberProvider.myBarberProfile!.salonId;
-          
+
           setState(() {
             _selectedSalon = Salon(
-              id: salonId, 
-              name: 'Moj Salon', 
-              address: '', 
+              id: salonId,
+              name: 'Moj Salon',
+              cityId: 0,
+              address: '',
               city: '',
               phone: '',
               postalCode: '',
-              country: '',
             );
           });
           context.read<ServiceProvider>().loadServices(salonId);
@@ -43,6 +48,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       } else {
         context.read<SalonProvider>().loadSalons();
       }
+      context.read<ServiceCategoryProvider>().loadCategories();
     });
   }
 
@@ -57,9 +63,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
           Consumer<AuthProvider>(
             builder: (context, authProvider, _) {
               if (authProvider.isBarber) {
-                return SizedBox.shrink(); 
+                return SizedBox.shrink();
               }
-              
+
               return Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Consumer<SalonProvider>(
@@ -93,6 +99,66 @@ class _ServicesScreenState extends State<ServicesScreen> {
               );
             }
           ),
+          if (_selectedSalon != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Column(
+                children: [
+                  TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Pretraži po nazivu ili opisu usluge...',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value.toLowerCase();
+                      });
+                    },
+                  ),
+                  SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        Text('Status: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                        SizedBox(width: 8),
+                        FilterChip(
+                          label: Text('Sve'),
+                          selected: _isActiveFilter == null,
+                          onSelected: (_) {
+                            setState(() {
+                              _isActiveFilter = null;
+                            });
+                          },
+                        ),
+                        SizedBox(width: 8),
+                        FilterChip(
+                          label: Text('Aktivne'),
+                          selected: _isActiveFilter == true,
+                          onSelected: (selected) {
+                            setState(() {
+                              _isActiveFilter = selected ? true : null;
+                            });
+                          },
+                        ),
+                        SizedBox(width: 8),
+                        FilterChip(
+                          label: Text('Neaktivne'),
+                          selected: _isActiveFilter == false,
+                          onSelected: (selected) {
+                            setState(() {
+                              _isActiveFilter = selected ? false : null;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
           Expanded(
             child: Consumer<ServiceProvider>(
@@ -129,11 +195,46 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   );
                 }
 
+                final filteredServices = provider.services.where((service) {
+                  final name = service.name.toLowerCase();
+                  final description = (service.description ?? '').toLowerCase();
+                  final matchesSearch = _searchQuery.isEmpty ||
+                      name.contains(_searchQuery) ||
+                      description.contains(_searchQuery);
+                  final matchesStatus =
+                      _isActiveFilter == null || service.isActive == _isActiveFilter;
+                  return matchesSearch && matchesStatus;
+                }).toList();
+
+                if (filteredServices.isEmpty) {
+                  return Center(
+                    child: Text('Nema usluga za odabrane filtere.'),
+                  );
+                }
+
                 return ListView.builder(
                   padding: EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: provider.services.length,
+                  itemCount: filteredServices.length + ((provider.hasMore || provider.isLoadingMore) ? 1 : 0),
                   itemBuilder: (context, index) {
-                    final service = provider.services[index];
+                    if (index == filteredServices.length) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Center(
+                          child: provider.isLoadingMore
+                              ? const CircularProgressIndicator()
+                              : OutlinedButton(
+                                  onPressed: _selectedSalon == null
+                                      ? null
+                                      : () => context.read<ServiceProvider>().loadServices(
+                                            _selectedSalon!.id,
+                                            refresh: false,
+                                          ),
+                                  child: const Text('Učitaj još'),
+                                ),
+                        ),
+                      );
+                    }
+                    final service = filteredServices[index];
                     return _buildServiceCard(service);
                   },
                 );
@@ -142,14 +243,15 @@ class _ServicesScreenState extends State<ServicesScreen> {
           ),
         ],
       ),
-      floatingActionButton: _selectedSalon != null
-          ? FloatingActionButton.extended(
-              onPressed: () => _showAddServiceDialog(context),
-              label: Text('Nova usluga'),
-              icon: Icon(Icons.add),
-              backgroundColor: Color(0xFFE0CFA9),
-            )
-          : null,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _selectedSalon != null ? () => _showAddServiceDialog(context) : null,
+        tooltip: _selectedSalon != null
+            ? 'Dodaj novu uslugu'
+            : 'Odaberite salon za dodavanje usluge',
+        label: Text('Nova usluga'),
+        icon: Icon(Icons.add),
+        backgroundColor: Color(0xFFE0CFA9),
+      ),
     );
   }
 
@@ -183,17 +285,27 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     Text(service.description!,
                         style: TextStyle(color: Colors.grey[600], fontSize: 13)),
                   SizedBox(height: 8),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
                     children: [
                       _buildChip(Icons.access_time, '${service.durationMinutes} min', Colors.blue),
-                      SizedBox(width: 8),
                       _buildChip(Icons.attach_money, '${service.price.toStringAsFixed(2)} KM', Colors.green),
-                      if (service.isPopular) ...[
-                        SizedBox(width: 8),
+                      if (service.categoryName != null && service.categoryName!.isNotEmpty)
+                        _buildChip(Icons.category, service.categoryName!, Colors.purple),
+                      if (service.isPopular)
                         _buildChip(Icons.star, 'Popularna', Colors.orange),
-                      ],
                     ],
                   ),
+                  if (service.categoryDescription != null && service.categoryDescription!.trim().isNotEmpty) ...[
+                    SizedBox(height: 8),
+                    Text(
+                      service.categoryDescription!.trim(),
+                      style: TextStyle(color: Colors.grey[700], fontSize: 12, height: 1.25),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -239,7 +351,16 @@ class _ServicesScreenState extends State<ServicesScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Obriši uslugu'),
+        title: Row(
+          children: [
+            Expanded(child: Text('Obriši uslugu')),
+            IconButton(
+              tooltip: 'Zatvori formu',
+              onPressed: () => Navigator.pop(ctx),
+              icon: Icon(Icons.close),
+            ),
+          ],
+        ),
         content: Text('Da li ste sigurni da želite obrisati "${service.name}"?'),
         actions: [
           TextButton(
@@ -254,13 +375,19 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 final success = await context.read<ServiceProvider>().deleteService(service.id, _selectedSalon!.id);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(success ? 'Usluga obrisana.' : 'Greška pri brisanju.')),
+                    SnackBar(
+                      content: Text(
+                        success
+                            ? 'Usluga obrisana.'
+                            : 'Brisanje usluge nije uspjelo. Provjerite da li je usluga povezana s aktivnim terminima.',
+                      ),
+                    ),
                   );
                 }
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                    SnackBar(content: Text(ErrorMapper.toUserMessage(e))),
                   );
                 }
               }
@@ -277,13 +404,23 @@ class _ServicesScreenState extends State<ServicesScreen> {
     final priceController = TextEditingController();
     final durationController = TextEditingController();
     final descriptionController = TextEditingController();
+    int? selectedCategoryId;
     final formKey = GlobalKey<FormState>();
 
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('Nova Usluga'),
+          title: Row(
+            children: [
+              Expanded(child: Text('Nova Usluga')),
+              IconButton(
+                tooltip: 'Zatvori formu',
+                onPressed: () => Navigator.pop(context),
+                icon: Icon(Icons.close),
+              ),
+            ],
+          ),
           content: SingleChildScrollView(
             child: Form(
               key: formKey,
@@ -293,7 +430,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   TextFormField(
                     controller: nameController,
                     decoration: InputDecoration(labelText: 'Naziv', prefixIcon: Icon(Icons.label)),
-                    validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                    validator: FormValidators.serviceName,
                   ),
                   SizedBox(height: 8),
                   TextFormField(
@@ -306,14 +443,44 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     controller: priceController,
                     decoration: InputDecoration(labelText: 'Cijena (KM)', prefixIcon: Icon(Icons.attach_money)),
                     keyboardType: TextInputType.number,
-                    validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                    validator: FormValidators.servicePrice,
                   ),
                   SizedBox(height: 8),
                   TextFormField(
                     controller: durationController,
                     decoration: InputDecoration(labelText: 'Trajanje (min)', prefixIcon: Icon(Icons.access_time)),
                     keyboardType: TextInputType.number,
-                    validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                    validator: FormValidators.durationMinutes,
+                  ),
+                  SizedBox(height: 8),
+                  StatefulBuilder(
+                    builder: (context, setLocalState) {
+                      return Consumer<ServiceCategoryProvider>(
+                        builder: (context, categoryProvider, _) {
+                          return DropdownButtonFormField<int?>(
+                            value: selectedCategoryId,
+                            decoration: InputDecoration(
+                              labelText: 'Kategorija (opciono)',
+                              prefixIcon: Icon(Icons.category),
+                            ),
+                            items: [
+                              DropdownMenuItem<int?>(value: null, child: Text('-- Bez kategorije --')),
+                              ...categoryProvider.categories.map(
+                                (c) => DropdownMenuItem<int?>(
+                                  value: c.id,
+                                  child: Text(c.name),
+                                ),
+                              ),
+                            ],
+                            onChanged: (val) {
+                              setLocalState(() {
+                                selectedCategoryId = val;
+                              });
+                            },
+                          );
+                        },
+                      );
+                    },
                   ),
                 ],
               ),
@@ -332,23 +499,36 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     salonId: _selectedSalon!.id,
                     name: nameController.text,
                     description: descriptionController.text.isNotEmpty ? descriptionController.text : null,
-                    price: double.parse(priceController.text),
+                    price: double.parse(priceController.text.replaceAll(',', '.')),
                     durationMinutes: int.parse(durationController.text),
+                    categoryId: selectedCategoryId,
                   );
 
                   try {
                     final success = await context.read<ServiceProvider>().addService(service);
                     if (!context.mounted) return;
                     if (success) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Usluga dodana!')));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Usluga "${service.name}" je dodana u salon "${_selectedSalon!.name}".',
+                          ),
+                        ),
+                      );
                       Navigator.pop(context);
                     } else {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Operacija nije uspjela.')));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Dodavanje nije uspjelo. Provjerite: naziv (2-80), cijena (0-1000 KM), trajanje (1-600 min).',
+                          ),
+                        ),
+                      );
                     }
                   } catch (e) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                        SnackBar(content: Text(ErrorMapper.toUserMessage(e))),
                       );
                     }
                   }
@@ -367,13 +547,23 @@ class _ServicesScreenState extends State<ServicesScreen> {
     final priceController = TextEditingController(text: service.price.toString());
     final durationController = TextEditingController(text: service.durationMinutes.toString());
     final descriptionController = TextEditingController(text: service.description ?? '');
+    int? selectedCategoryId = service.categoryId;
     final formKey = GlobalKey<FormState>();
 
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('Uredi Uslugu'),
+          title: Row(
+            children: [
+              Expanded(child: Text('Uredi Uslugu')),
+              IconButton(
+                tooltip: 'Zatvori formu',
+                onPressed: () => Navigator.pop(context),
+                icon: Icon(Icons.close),
+              ),
+            ],
+          ),
           content: SingleChildScrollView(
             child: Form(
               key: formKey,
@@ -383,7 +573,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   TextFormField(
                     controller: nameController,
                     decoration: InputDecoration(labelText: 'Naziv', prefixIcon: Icon(Icons.label)),
-                    validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                    validator: FormValidators.serviceName,
                   ),
                   SizedBox(height: 8),
                   TextFormField(
@@ -396,14 +586,44 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     controller: priceController,
                     decoration: InputDecoration(labelText: 'Cijena (KM)', prefixIcon: Icon(Icons.attach_money)),
                     keyboardType: TextInputType.number,
-                    validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                    validator: FormValidators.servicePrice,
                   ),
                   SizedBox(height: 8),
                   TextFormField(
                     controller: durationController,
                     decoration: InputDecoration(labelText: 'Trajanje (min)', prefixIcon: Icon(Icons.access_time)),
                     keyboardType: TextInputType.number,
-                    validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                    validator: FormValidators.durationMinutes,
+                  ),
+                  SizedBox(height: 8),
+                  StatefulBuilder(
+                    builder: (context, setLocalState) {
+                      return Consumer<ServiceCategoryProvider>(
+                        builder: (context, categoryProvider, _) {
+                          return DropdownButtonFormField<int?>(
+                            value: selectedCategoryId,
+                            decoration: InputDecoration(
+                              labelText: 'Kategorija (opciono)',
+                              prefixIcon: Icon(Icons.category),
+                            ),
+                            items: [
+                              DropdownMenuItem<int?>(value: null, child: Text('-- Bez kategorije --')),
+                              ...categoryProvider.categories.map(
+                                (c) => DropdownMenuItem<int?>(
+                                  value: c.id,
+                                  child: Text(c.name),
+                                ),
+                              ),
+                            ],
+                            onChanged: (val) {
+                              setLocalState(() {
+                                selectedCategoryId = val;
+                              });
+                            },
+                          );
+                        },
+                      );
+                    },
                   ),
                 ],
               ),
@@ -422,8 +642,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     salonId: service.salonId,
                     name: nameController.text,
                     description: descriptionController.text.isNotEmpty ? descriptionController.text : null,
-                    price: double.parse(priceController.text),
+                    price: double.parse(priceController.text.replaceAll(',', '.')),
                     durationMinutes: int.parse(durationController.text),
+                    categoryId: selectedCategoryId,
                     isPopular: service.isPopular,
                     isActive: service.isActive,
                   );
@@ -432,15 +653,27 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     final success = await context.read<ServiceProvider>().updateService(updated);
                     if (!context.mounted) return;
                     if (success) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Usluga ažurirana!')));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Usluga "${updated.name}" je ažurirana u salonu "${_selectedSalon!.name}".',
+                          ),
+                        ),
+                      );
                       Navigator.pop(context);
                     } else {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Spremanje nije uspjelo.')));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Ažuriranje nije uspjelo. Provjerite: naziv (2-80), cijena (0-1000 KM), trajanje (1-600 min).',
+                          ),
+                        ),
+                      );
                     }
                   } catch (e) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                        SnackBar(content: Text(ErrorMapper.toUserMessage(e))),
                       );
                     }
                   }

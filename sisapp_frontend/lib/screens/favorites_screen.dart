@@ -4,7 +4,7 @@ import '../providers/salon_provider.dart';
 import '../models/salon.dart';
 import '../widgets/entity_image.dart';
 import '../providers/auth_provider.dart';
-import 'package:geolocator/geolocator.dart'; // Optional if you want distance here as well, but lets keep it simple
+import 'package:geolocator/geolocator.dart';
 
 class FavoritesScreen extends StatelessWidget {
   @override
@@ -51,7 +51,7 @@ class FavoritesScreen extends StatelessWidget {
 
   Widget _buildFavoriteItem(BuildContext context, Salon salon) {
     final token = context.read<AuthProvider>().tokenResponse?.token ?? '';
-    
+
     return Card(
       elevation: 2,
       margin: EdgeInsets.only(bottom: 12),
@@ -83,7 +83,7 @@ class FavoritesScreen extends StatelessWidget {
                 ),
               ),
               SizedBox(width: 16),
-              // Salon info
+
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

@@ -13,7 +13,7 @@ class BarberDashboardScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Logo placeholder or styling
+
               Icon(Icons.cut, size: 40, color: Colors.black),
               SizedBox(width: 12),
               Text(
@@ -23,13 +23,13 @@ class BarberDashboardScreen extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1.2,
                   color: Colors.black,
-                  fontFamily: 'Serif', 
+                  fontFamily: 'Serif',
                 ),
               ),
             ],
           ),
           SizedBox(height: 60),
-          
+
           _buildMenuButton(
             context,
             title: 'NARUDŽBE',
@@ -37,7 +37,7 @@ class BarberDashboardScreen extends StatelessWidget {
             route: '/appointments',
           ),
           SizedBox(height: 24),
-          
+
           _buildMenuButton(
             context,
             title: 'USLUGE',
@@ -45,7 +45,23 @@ class BarberDashboardScreen extends StatelessWidget {
             route: '/services',
           ),
           SizedBox(height: 24),
-          
+
+          _buildMenuButton(
+            context,
+            title: 'RADNO VRIJEME',
+            icon: Icons.schedule,
+            route: '/barber-schedule',
+          ),
+          SizedBox(height: 24),
+
+          _buildMenuButton(
+            context,
+            title: 'RECENZIJE',
+            icon: Icons.reviews_outlined,
+            route: '/barber-reviews',
+          ),
+          SizedBox(height: 24),
+
           _buildMenuButton(
             context,
             title: 'RADNICI',
@@ -53,12 +69,20 @@ class BarberDashboardScreen extends StatelessWidget {
             route: '/barbers',
           ),
           SizedBox(height: 24),
-          
+
           _buildMenuButton(
             context,
             title: 'POSTAVKE',
             icon: Icons.settings_outlined,
             route: '/edit_salon',
+          ),
+          SizedBox(height: 24),
+
+          _buildMenuButton(
+            context,
+            title: 'MOJ PROFIL',
+            icon: Icons.person_outline,
+            route: '/edit-profile',
           ),
         ],
       ),
@@ -77,7 +101,7 @@ class BarberDashboardScreen extends StatelessWidget {
       child: Container(
         height: 70,
         decoration: BoxDecoration(
-          color: Colors.grey[300], 
+          color: Colors.grey[300],
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -87,12 +111,12 @@ class BarberDashboardScreen extends StatelessWidget {
               child: Icon(
                 icon,
                 size: 32,
-                color: Colors.black, 
+                color: Colors.black,
               ),
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.only(right: 64.0), 
+                padding: const EdgeInsets.only(right: 64.0),
                 child: Text(
                   title,
                   textAlign: TextAlign.center,

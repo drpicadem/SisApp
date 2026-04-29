@@ -39,9 +39,6 @@ namespace ŠišAppApi.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("IsSuperAdmin")
-                        .HasColumnType("bit");
-
                     b.Property<DateTime?>("LastLoginAt")
                         .HasColumnType("datetime2");
 
@@ -167,9 +164,6 @@ namespace ŠišAppApi.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<int?>("EmployeeId")
-                        .HasColumnType("int");
-
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -213,13 +207,13 @@ namespace ŠišAppApi.Migrations
 
                     b.HasIndex("CustomerId");
 
-                    b.HasIndex("EmployeeId");
-
                     b.HasIndex("SalonId");
 
                     b.HasIndex("ServiceId");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId", "ServiceId", "AppointmentDateTime")
+                        .IsUnique()
+                        .HasFilter("[Status] <> 'Cancelled'");
 
                     b.ToTable("Appointments");
                 });
@@ -343,6 +337,27 @@ namespace ŠišAppApi.Migrations
                     b.ToTable("BarberSpecialties");
                 });
 
+            modelBuilder.Entity("ŠišAppApi.Models.City", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Cities");
+                });
+
             modelBuilder.Entity("ŠišAppApi.Models.Customer", b =>
                 {
                     b.Property<int>("Id")
@@ -396,65 +411,6 @@ namespace ŠišAppApi.Migrations
                         .IsUnique();
 
                     b.ToTable("Customers");
-                });
-
-            modelBuilder.Entity("ŠišAppApi.Models.Employee", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("EmploymentDetails")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("HireDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Permissions")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Position")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<int>("SalonId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Schedule")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("TerminationDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SalonId");
-
-                    b.HasIndex("UserId")
-                        .IsUnique();
-
-                    b.ToTable("Employees");
                 });
 
             modelBuilder.Entity("ŠišAppApi.Models.FavoriteSalon", b =>
@@ -512,6 +468,9 @@ namespace ŠišAppApi.Migrations
                     b.Property<string>("EntityType")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<byte[]>("FileData")
+                        .HasColumnType("varbinary(max)");
 
                     b.Property<string>("FileName")
                         .IsRequired()
@@ -584,6 +543,11 @@ namespace ŠišAppApi.Migrations
 
                     b.Property<DateTime>("SentAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -884,15 +848,8 @@ namespace ŠišAppApi.Migrations
                     b.Property<string>("BusinessHours")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("City")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Country")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<int>("CityId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -963,6 +920,8 @@ namespace ŠišAppApi.Migrations
                         .HasColumnType("nvarchar(255)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CityId");
 
                     b.ToTable("Salons");
                 });
@@ -1146,9 +1105,6 @@ namespace ŠišAppApi.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<DateTime?>("EmailVerifiedAt")
-                        .HasColumnType("datetime2");
-
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -1172,10 +1128,6 @@ namespace ŠišAppApi.Migrations
                     b.Property<DateTime?>("LastLoginAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("LastLoginIp")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -1186,15 +1138,22 @@ namespace ŠišAppApi.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<DateTime?>("PasswordResetRequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PasswordResetTokenExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PasswordResetTokenHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime?>("PasswordResetUsedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("PhoneNumber")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateTime?>("PhoneVerifiedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Preferences")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -1222,70 +1181,6 @@ namespace ŠišAppApi.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("ŠišAppApi.Models.UserPreferences", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Currency")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DisplaySettings")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("EmailNotifications")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Language")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
-
-                    b.Property<string>("NotificationPreferences")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PrivacySettings")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("PushNotifications")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("SmsNotifications")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Theme")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("TimeZone")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId")
-                        .IsUnique();
-
-                    b.ToTable("UserPreferences");
-                });
-
             modelBuilder.Entity("ŠišAppApi.Models.WorkingHours", b =>
                 {
                     b.Property<int>("Id")
@@ -1305,9 +1200,6 @@ namespace ŠišAppApi.Migrations
 
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
-
-                    b.Property<int?>("EmployeeId")
-                        .HasColumnType("int");
 
                     b.Property<TimeSpan>("EndTime")
                         .HasColumnType("time");
@@ -1339,8 +1231,6 @@ namespace ŠišAppApi.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BarberId");
-
-                    b.HasIndex("EmployeeId");
 
                     b.ToTable("WorkingHours");
                 });
@@ -1378,10 +1268,6 @@ namespace ŠišAppApi.Migrations
                     b.HasOne("ŠišAppApi.Models.Customer", null)
                         .WithMany("Appointments")
                         .HasForeignKey("CustomerId");
-
-                    b.HasOne("ŠišAppApi.Models.Employee", null)
-                        .WithMany("Appointments")
-                        .HasForeignKey("EmployeeId");
 
                     b.HasOne("ŠišAppApi.Models.Salon", "Salon")
                         .WithMany("Appointments")
@@ -1455,25 +1341,6 @@ namespace ŠišAppApi.Migrations
                         .HasForeignKey("ŠišAppApi.Models.Customer", "UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("ŠišAppApi.Models.Employee", b =>
-                {
-                    b.HasOne("ŠišAppApi.Models.Salon", "Salon")
-                        .WithMany()
-                        .HasForeignKey("SalonId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("ŠišAppApi.Models.User", "User")
-                        .WithOne("Employee")
-                        .HasForeignKey("ŠišAppApi.Models.Employee", "UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Salon");
 
                     b.Navigation("User");
                 });
@@ -1602,6 +1469,17 @@ namespace ŠišAppApi.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("ŠišAppApi.Models.Salon", b =>
+                {
+                    b.HasOne("ŠišAppApi.Models.City", "CityRef")
+                        .WithMany("Salons")
+                        .HasForeignKey("CityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CityRef");
+                });
+
             modelBuilder.Entity("ŠišAppApi.Models.SalonAmenity", b =>
                 {
                     b.HasOne("ŠišAppApi.Models.Image", "Image")
@@ -1660,17 +1538,6 @@ namespace ŠišAppApi.Migrations
                     b.Navigation("ProfileImage");
                 });
 
-            modelBuilder.Entity("ŠišAppApi.Models.UserPreferences", b =>
-                {
-                    b.HasOne("ŠišAppApi.Models.User", "User")
-                        .WithOne("UserPreferences")
-                        .HasForeignKey("ŠišAppApi.Models.UserPreferences", "UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("ŠišAppApi.Models.WorkingHours", b =>
                 {
                     b.HasOne("ŠišAppApi.Models.Barber", "Barber")
@@ -1678,10 +1545,6 @@ namespace ŠišAppApi.Migrations
                         .HasForeignKey("BarberId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("ŠišAppApi.Models.Employee", null)
-                        .WithMany("WorkingHours")
-                        .HasForeignKey("EmployeeId");
 
                     b.Navigation("Barber");
                 });
@@ -1709,6 +1572,11 @@ namespace ŠišAppApi.Migrations
                     b.Navigation("WorkingHours");
                 });
 
+            modelBuilder.Entity("ŠišAppApi.Models.City", b =>
+                {
+                    b.Navigation("Salons");
+                });
+
             modelBuilder.Entity("ŠišAppApi.Models.Customer", b =>
                 {
                     b.Navigation("Appointments");
@@ -1716,13 +1584,6 @@ namespace ŠišAppApi.Migrations
                     b.Navigation("Payments");
 
                     b.Navigation("Reviews");
-                });
-
-            modelBuilder.Entity("ŠišAppApi.Models.Employee", b =>
-                {
-                    b.Navigation("Appointments");
-
-                    b.Navigation("WorkingHours");
                 });
 
             modelBuilder.Entity("ŠišAppApi.Models.Salon", b =>
@@ -1762,8 +1623,6 @@ namespace ŠišAppApi.Migrations
 
                     b.Navigation("Customer");
 
-                    b.Navigation("Employee");
-
                     b.Navigation("Notifications");
 
                     b.Navigation("Recommendations");
@@ -1771,8 +1630,6 @@ namespace ŠišAppApi.Migrations
                     b.Navigation("RefreshTokens");
 
                     b.Navigation("Reviews");
-
-                    b.Navigation("UserPreferences");
                 });
 #pragma warning restore 612, 618
         }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ŠišAppApi.Constants;
 using ŠišAppApi.Models.DTOs;
 using ŠišAppApi.Models.Requests;
 using ŠišAppApi.Models.SearchObjects;
@@ -14,7 +15,7 @@ public class ServicesController : BaseCRUDController<ServiceDto, ServiceSearchOb
 {
     private readonly IServiceService _serviceService;
 
-    public ServicesController(IServiceService serviceService) : base(serviceService)
+    public ServicesController(IServiceService serviceService, ICurrentUserService currentUser) : base(serviceService, currentUser)
     {
         _serviceService = serviceService;
     }
@@ -27,30 +28,31 @@ public class ServicesController : BaseCRUDController<ServiceDto, ServiceSearchOb
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin,Barber")]
+    [Authorize(Roles = AppRoles.AdminOrBarber)]
     public override async Task<ActionResult<ServiceDto>> Insert([FromBody] ServiceInsertRequest request)
     {
         return await base.Insert(request);
     }
 
     [HttpPut("{id}")]
-    [Authorize(Roles = "Admin,Barber")]
+    [Authorize(Roles = AppRoles.AdminOrBarber)]
     public override async Task<ActionResult<ServiceDto>> Update(int id, [FromBody] ServiceUpdateRequest request)
     {
         return await base.Update(id, request);
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Roles = "Admin,Barber")]
+    [Authorize(Roles = AppRoles.AdminOrBarber)]
     public override async Task<ActionResult<ServiceDto>> Delete(int id)
     {
         var userRole = GetUserRole();
-        if (userRole == "Barber")
+        if (userRole == AppRoles.Barber)
         {
             var userId = GetUserId();
             var result = await _serviceService.DeleteAsBarber(id, userId);
             return Ok(result);
         }
-        return await base.Delete(id);
+        var adminResult = await _serviceService.Delete(id);
+        return Ok(adminResult);
     }
 }

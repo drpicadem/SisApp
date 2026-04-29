@@ -57,13 +57,13 @@ class _BarberScheduleScreenState extends State<BarberScheduleScreen> {
             );
           }
 
-          // Build a list of all 7 days, showing configured and unconfigured
+
           return ListView.builder(
             padding: EdgeInsets.all(16),
             itemCount: 7,
             itemBuilder: (context, index) {
-              // Days: Mon=1, Tue=2, ..., Sat=6, Sun=0
-              final dayIndex = (index + 1) % 7; // Start from Monday
+
+              final dayIndex = (index + 1) % 7;
               final wh = provider.schedule.where((s) => s.dayOfWeek == dayIndex).toList();
 
               return Card(
@@ -192,7 +192,12 @@ class _BarberScheduleScreenState extends State<BarberScheduleScreen> {
                         isWorking: isWorking,
                       ));
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Radno vrijeme dodano!'), backgroundColor: Colors.green),
+                        SnackBar(
+                          content: Text(
+                            'Radno vrijeme za ${_dayNames[selectedDay]} je dodano: ${startTime.format(context)} - ${endTime.format(context)}.',
+                          ),
+                          backgroundColor: Colors.green,
+                        ),
                       );
                     } catch (e) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -271,7 +276,12 @@ class _BarberScheduleScreenState extends State<BarberScheduleScreen> {
                         isWorking: isWorking,
                       ));
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Radno vrijeme ažurirano!'), backgroundColor: Colors.green),
+                        SnackBar(
+                          content: Text(
+                            'Radno vrijeme za ${existing.dayName} je ažurirano: ${startTime.format(context)} - ${endTime.format(context)}.',
+                          ),
+                          backgroundColor: Colors.green,
+                        ),
                       );
                     } catch (e) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -310,7 +320,11 @@ class _BarberScheduleScreenState extends State<BarberScheduleScreen> {
           .deleteWorkingHours(id);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(success ? 'Obrisano!' : 'Nije moguće obrisati radno vrijeme.'),
+          content: Text(
+            success
+                ? 'Radno vrijeme je uspješno obrisano iz rasporeda.'
+                : 'Radno vrijeme nije obrisano. Provjerite ograničenja i pokušajte ponovo.',
+          ),
           backgroundColor: success ? Colors.green : Colors.red,
         ),
       );

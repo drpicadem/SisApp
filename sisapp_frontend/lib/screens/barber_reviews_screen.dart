@@ -57,16 +57,19 @@ class _BarberReviewsScreenState extends State<BarberReviewsScreen> {
                 )
               : Column(
                   children: [
-                    // Average Rating Summary
+
                     Container(
                       width: double.infinity,
                       margin: EdgeInsets.all(16),
                       padding: EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [Colors.blue.shade700, Colors.blue.shade400],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF6E84A3), Color(0xFF9FB3C8)],
                         ),
                         borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Color(0xFFD7DEE7)),
                       ),
                       child: Column(
                         children: [
@@ -88,13 +91,13 @@ class _BarberReviewsScreenState extends State<BarberReviewsScreen> {
                           SizedBox(height: 4),
                           Text(
                             '${_reviews.length} recenzija',
-                            style: TextStyle(color: Colors.white70, fontSize: 14),
+                            style: TextStyle(color: Color(0xFFEFF4FA), fontSize: 14),
                           ),
                         ],
                       ),
                     ),
 
-                    // Reviews List
+
                     Expanded(
                       child: ListView.builder(
                         padding: EdgeInsets.symmetric(horizontal: 16),
@@ -119,7 +122,7 @@ class _BarberReviewsScreenState extends State<BarberReviewsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
+
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -145,7 +148,7 @@ class _BarberReviewsScreenState extends State<BarberReviewsScreen> {
             ),
             SizedBox(height: 8),
 
-            // Stars + Service
+
             Row(
               children: [
                 ...List.generate(
@@ -168,10 +171,10 @@ class _BarberReviewsScreenState extends State<BarberReviewsScreen> {
             ),
             SizedBox(height: 8),
 
-            // Comment
+
             Text(review.comment, style: TextStyle(fontSize: 14)),
 
-            // Barber Response (if exists)
+
             if (review.barberResponse != null) ...[
               SizedBox(height: 12),
               Container(
@@ -208,7 +211,7 @@ class _BarberReviewsScreenState extends State<BarberReviewsScreen> {
               ),
             ],
 
-            // Reply Button
+
             Padding(
               padding: EdgeInsets.only(top: 8),
               child: Row(
@@ -232,6 +235,7 @@ class _BarberReviewsScreenState extends State<BarberReviewsScreen> {
   }
 
   Future<void> _showRespondDialog(BuildContext context, Review review) async {
+    final formKey = GlobalKey<FormState>();
     final controller = TextEditingController(text: review.barberResponse ?? '');
 
     await showDialog(
@@ -248,13 +252,23 @@ class _BarberReviewsScreenState extends State<BarberReviewsScreen> {
               SizedBox(height: 4),
               Text(review.comment, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
               SizedBox(height: 16),
-              TextField(
+              Form(
+                key: formKey,
+                child: TextFormField(
                 controller: controller,
                 maxLines: 4,
                 maxLength: 500,
                 decoration: InputDecoration(
                   hintText: 'Napišite odgovor (min. 5 znakova)...',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                validator: (value) {
+                  final text = value?.trim() ?? '';
+                  if (text.length < 5) {
+                    return 'Odgovor mora imati najmanje 5 znakova.';
+                  }
+                  return null;
+                },
                 ),
               ),
             ],
@@ -263,10 +277,7 @@ class _BarberReviewsScreenState extends State<BarberReviewsScreen> {
             TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Otkaži')),
             ElevatedButton(
               onPressed: () async {
-                if (controller.text.trim().length < 5) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Odgovor mora imati najmanje 5 znakova.')),
-                  );
+                if (!(formKey.currentState?.validate() ?? false)) {
                   return;
                 }
                 Navigator.pop(ctx);
@@ -278,9 +289,14 @@ class _BarberReviewsScreenState extends State<BarberReviewsScreen> {
                     controller.text.trim(),
                   );
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Odgovor sačuvan!'), backgroundColor: Colors.green),
+                    SnackBar(
+                      content: Text(
+                        'Odgovor na recenziju korisnika "${review.userName}" je uspješno sačuvan.',
+                      ),
+                      backgroundColor: Colors.green,
+                    ),
                   );
-                  _fetchReviews(); // Refresh
+                  _fetchReviews();
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(

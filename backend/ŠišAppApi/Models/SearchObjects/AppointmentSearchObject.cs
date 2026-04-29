@@ -7,13 +7,14 @@ namespace ŠišAppApi.Models.SearchObjects
         public DateTime? FromDate { get; set; }
         public DateTime? ToDate { get; set; }
         public string? Status { get; set; }
-        public bool? IsActive { get; set; } // true = Future, false = Past
+        public bool? IsActive { get; set; }
         public bool? IsPaid { get; set; }
-        
+        public string? Q { get; set; }
+
         public int? Page { get; set; }
         public int? PageSize { get; set; }
 
-        // RBAC Context (Populated by Controller)
+
         public int? CurrentUserId { get; set; }
         public string? CurrentUserRole { get; set; }
     }

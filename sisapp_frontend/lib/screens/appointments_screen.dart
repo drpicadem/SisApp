@@ -1,13 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:intl/date_symbol_data_local.dart'; 
+import 'package:intl/date_symbol_data_local.dart';
+import 'dart:async';
 import '../providers/appointment_provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/appointment.dart';
+import 'appointment_details_screen.dart';
 import 'review_form_screen.dart';
+import '../utils/error_mapper.dart';
 
 class AppointmentsScreen extends StatefulWidget {
+  final int? initialTab;
+  final int? focusAppointmentId;
+
+  const AppointmentsScreen({Key? key, this.initialTab, this.focusAppointmentId}) : super(key: key);
+
   @override
   _AppointmentsScreenState createState() => _AppointmentsScreenState();
 }
@@ -15,18 +23,73 @@ class AppointmentsScreen extends StatefulWidget {
 class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final ScrollController _scrollController = ScrollController();
-  bool? _isPaidFilter; // null = All, true = Paid, false = Unpaid
+  final Map<int, GlobalKey> _appointmentCardKeys = {};
+  bool? _isPaidFilter;
+  bool _initialTabApplied = false;
+  bool _initialFocusApplied = false;
+  bool _focusHighlightVisible = true;
+  bool _focusHighlightTimerStarted = false;
+  bool _didAutoScrollToFocus = false;
 
   @override
   void initState() {
     super.initState();
-    initializeDateFormatting('bs'); 
+    initializeDateFormatting('bs');
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_onTabChanged);
     _scrollController.addListener(_onScroll);
+  }
 
-    
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialTabApplied) return;
+
+    final args = ModalRoute.of(context)?.settings.arguments;
+    int initialTab = widget.initialTab ?? 0;
+    if (widget.initialTab == null && args is Map && args['initialTab'] is int) {
+      initialTab = args['initialTab'] as int;
+    }
+    if (initialTab < 0 || initialTab > 1) {
+      initialTab = 0;
+    }
+
+    _tabController.index = initialTab;
+    _initialTabApplied = true;
+    _startFocusHighlightTimerIfNeeded();
     Future.microtask(() => _fetchAppointments());
+  }
+
+  int? _resolveFocusAppointmentId() {
+    if (widget.focusAppointmentId != null) {
+      return widget.focusAppointmentId;
+    }
+
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map && args['focusAppointmentId'] is int) {
+      return args['focusAppointmentId'] as int;
+    }
+
+    return null;
+  }
+
+  GlobalKey _getAppointmentCardKey(int appointmentId) {
+    return _appointmentCardKeys.putIfAbsent(appointmentId, () => GlobalKey());
+  }
+
+  void _startFocusHighlightTimerIfNeeded() {
+    final focusId = _resolveFocusAppointmentId();
+    if (focusId == null || _focusHighlightTimerStarted) {
+      return;
+    }
+
+    _focusHighlightTimerStarted = true;
+    Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      setState(() {
+        _focusHighlightVisible = false;
+      });
+    });
   }
 
   void _onTabChanged() {
@@ -46,10 +109,24 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
 
   void _fetchAppointments({bool refresh = true}) {
     final isActive = _tabController.index == 0;
+    int? prioritizeAppointmentId;
+    if (refresh && !_initialFocusApplied) {
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (widget.focusAppointmentId != null) {
+        prioritizeAppointmentId = widget.focusAppointmentId;
+      } else if (args is Map && args['focusAppointmentId'] is int) {
+        prioritizeAppointmentId = args['focusAppointmentId'] as int;
+      }
+      if (prioritizeAppointmentId != null) {
+        _initialFocusApplied = true;
+      }
+    }
+
     Provider.of<AppointmentProvider>(context, listen: false).fetchAppointments(
       refresh: refresh,
       isActive: isActive,
       isPaid: _isPaidFilter,
+      prioritizeAppointmentId: prioritizeAppointmentId,
     );
   }
 
@@ -113,14 +190,20 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
                       .cancelAppointment(appointmentId);
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(success ? 'Termin je uspješno otkazan.' : 'Greška pri otkazivanju.')),
+                      SnackBar(
+                        content: Text(
+                          success
+                              ? 'Termin je uspješno otkazan.'
+                              : 'Otkazivanje termina nije uspjelo. Provjerite status termina i pokušajte ponovo.',
+                        ),
+                      ),
                     );
                     if (success) _fetchAppointments();
                   }
                 } catch (e) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                      SnackBar(content: Text(ErrorMapper.toUserMessage(e))),
                     );
                   }
                 }
@@ -191,7 +274,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
               ),
             ),
           ),
-          
+
           Expanded(
             child: Consumer<AppointmentProvider>(
               builder: (context, provider, child) {
@@ -213,7 +296,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
 
                     final appointment = provider.appointments[index];
                     final currencyFormatter = NumberFormat.currency(locale: 'bs', symbol: 'KM');
-                    
+
                     bool showHeader = false;
                     if (index == 0) {
                       showHeader = true;
@@ -227,9 +310,9 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (showHeader) 
+                        if (showHeader)
                           _buildDateHeader(appointment.appointmentDateTime),
-                        
+
                         _buildAppointmentCard(appointment, currencyFormatter),
                       ],
                     );
@@ -272,11 +355,60 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
   }
 
   Widget _buildAppointmentCard(Appointment appointment, NumberFormat currencyFormatter) {
-    return Card(
+    final focusAppointmentId = _resolveFocusAppointmentId();
+    final isFocusedAppointment = focusAppointmentId != null && appointment.id == focusAppointmentId;
+    final cardKey = appointment.id != null ? _getAppointmentCardKey(appointment.id!) : null;
+
+    if (isFocusedAppointment && !_didAutoScrollToFocus && cardKey != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _didAutoScrollToFocus) return;
+        final ctx = cardKey.currentContext;
+        if (ctx == null) return;
+        _didAutoScrollToFocus = true;
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeOut,
+          alignment: 0.1,
+        );
+      });
+    }
+
+    return AnimatedContainer(
+      key: cardKey,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: isFocusedAppointment && _focusHighlightVisible
+            ? Border.all(color: const Color(0xFF7B5EA7), width: 2)
+            : null,
+        boxShadow: isFocusedAppointment && _focusHighlightVisible
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF7B5EA7).withOpacity(0.22),
+                  blurRadius: 14,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 3),
+                ),
+              ]
+            : null,
+      ),
+      child: Card(
       margin: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AppointmentDetailsScreen(appointment: appointment),
+            ),
+          );
+        },
+        child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Column(
           children: [
@@ -407,7 +539,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
                 ),
               ],
             ),
-            
+
             if (appointment.status == 'Pending' || appointment.status == 'Confirmed')
               Padding(
                 padding: const EdgeInsets.only(top: 12.0),
@@ -431,7 +563,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
                 ),
               ),
 
-            if ((appointment.status == 'Completed' || appointment.paymentStatus == 'Paid') &&
+            if ((appointment.status ?? '').toLowerCase() == 'completed' &&
                 !context.read<AuthProvider>().isBarber)
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
@@ -465,6 +597,8 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
           ],
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 }

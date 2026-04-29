@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart'; // For date formatting
-import '../providers/auth_provider.dart';
-import '../services/api_service.dart';
-import '../models/notification.dart' as model; // Alias to avoid conflict with Flutter Notification
+import 'package:intl/intl.dart';
+import '../providers/notification_provider.dart';
 
 class NotificationsScreen extends StatefulWidget {
   @override
@@ -11,61 +9,34 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  final ApiService _apiService = ApiService();
-  List<model.Notification> _notifications = [];
-  bool _isLoading = true;
+  String _fixUtcTimeInMessage(String message) {
+    final re = RegExp(r'\bza\s+(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})\b');
+    return message.replaceAllMapped(re, (m) {
+      final d = int.parse(m.group(1)!);
+      final mo = int.parse(m.group(2)!);
+      final y = int.parse(m.group(3)!);
+      final h = int.parse(m.group(4)!);
+      final mi = int.parse(m.group(5)!);
+      final utc = DateTime.utc(y, mo, d, h, mi);
+      final local = utc.toLocal();
+      return 'za ${DateFormat('dd.MM.yyyy HH:mm').format(local)}';
+    });
+  }
 
   @override
   void initState() {
     super.initState();
-    _fetchNotifications();
-  }
-
-  Future<void> _fetchNotifications() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    if (!authProvider.isLoggedIn || authProvider.userId == null) return;
-
-    setState(() {
-      _isLoading = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<NotificationProvider>().refresh();
     });
-
-    try {
-      final notifications = await _apiService.getNotifications(
-        authProvider.userId!,
-        authProvider.tokenResponse!.token,
-      );
-      setState(() {
-        _notifications = notifications;
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
   }
 
   Future<void> _markAsRead(int notificationId) async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    if (!authProvider.isLoggedIn) return;
-
-    await _apiService.markNotificationAsRead(notificationId, authProvider.tokenResponse!.token);
-    _fetchNotifications(); // Refresh list
+    await context.read<NotificationProvider>().markAsRead(notificationId);
   }
 
   Future<void> _markAllAsRead() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    if (!authProvider.isLoggedIn || authProvider.userId == null) return;
-
-    await _apiService.markAllNotificationsAsRead(authProvider.userId!, authProvider.tokenResponse!.token);
-    _fetchNotifications(); // Refresh list
+    await context.read<NotificationProvider>().markAllAsRead();
   }
 
   @override
@@ -82,16 +53,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           )
         ],
       ),
-      body: _isLoading
+      body: Consumer<NotificationProvider>(
+        builder: (context, provider, _) {
+          return provider.isLoading
           ? Center(child: CircularProgressIndicator())
-          : _notifications.isEmpty
+          : provider.notifications.isEmpty
               ? Center(child: Text("Nemate obavještenja.", style: TextStyle(fontSize: 18, color: Colors.grey)))
               : RefreshIndicator(
-                  onRefresh: _fetchNotifications,
+                  onRefresh: () => provider.refresh(showLoader: false),
                   child: ListView.builder(
-                    itemCount: _notifications.length,
+                    itemCount: provider.notifications.length,
                     itemBuilder: (context, index) {
-                      final notification = _notifications[index];
+                      final notification = provider.notifications[index];
+                      final message = _fixUtcTimeInMessage(notification.message);
                       return Card(
                         color: notification.isRead ? Colors.white : Colors.teal.shade50,
                         margin: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -101,14 +75,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             color: Colors.teal,
                           ),
                           title: Text(
-                            notification.message,
+                            notification.title,
                             style: TextStyle(
                               fontWeight: notification.isRead ? FontWeight.normal : FontWeight.bold,
                             ),
                           ),
-                          subtitle: Text(
-                            DateFormat('dd.MM.yyyy HH:mm').format(notification.sentAt),
-                            style: TextStyle(fontSize: 12),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(message),
+                              SizedBox(height: 4),
+                              Text(
+                                DateFormat('dd.MM.yyyy HH:mm').format(notification.sentAt),
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ],
                           ),
                           trailing: !notification.isRead
                               ? IconButton(
@@ -120,7 +102,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       );
                     },
                   ),
-                ),
+                );
+        },
+      ),
     );
   }
 }

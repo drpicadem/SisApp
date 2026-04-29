@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
+import 'dart:typed_data';
 import '../services/api_service.dart';
 import '../providers/auth_provider.dart';
 
@@ -14,6 +15,31 @@ class ReportsScreen extends StatefulWidget {
 class _ReportsScreenState extends State<ReportsScreen> {
   Map<String, dynamic>? _stats;
   bool _isLoading = true;
+
+  Future<void> _printPdf(Future<Uint8List?> Function(String token) loader, String label) async {
+    final token = context.read<AuthProvider>().tokenResponse?.token;
+    if (token == null) return;
+
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Generišem PDF: $label...')),
+      );
+      final pdfBytes = await loader(token);
+      if (pdfBytes != null) {
+        await Printing.layoutPdf(
+          onLayout: (PdfPageFormat format) async => pdfBytes,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Greška pri dohvaćanju PDF-a: $label.')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -40,45 +66,37 @@ class _ReportsScreenState extends State<ReportsScreen> {
       appBar: AppBar(
         title: Text('Izvještaji i Statistika'),
         actions: [
-          IconButton(
+          PopupMenuButton<String>(
             icon: Icon(Icons.print),
             tooltip: 'Preuzmi / Isprintaj PDF',
-            onPressed: _isLoading ? null : () async {
-              final token = context.read<AuthProvider>().tokenResponse?.token;
-              if (token != null) {
-                try {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Generišem PDF...')),
-                  );
-                  final pdfBytes = await ApiService().getReportsPdf(token);
-                  if (pdfBytes != null) {
-                    await Printing.layoutPdf(
-                        onLayout: (PdfPageFormat format) async => pdfBytes);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Greška pri dohvaćanju PDF-a.')),
-                    );
-                  }
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
-                  );
-                }
+            onSelected: (value) async {
+              if (_isLoading) return;
+              if (value == 'stats') {
+                await _printPdf((token) => ApiService().getReportsPdf(token), 'Statistika');
+              } else if (value == 'appointments') {
+                await _printPdf((token) => ApiService().getAppointmentsReportPdf(token), 'Rezervacije');
+              } else if (value == 'revenue') {
+                await _printPdf((token) => ApiService().getRevenueReportPdf(token), 'Prihodi');
               }
             },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'stats', child: Text('PDF: Statistika')),
+              PopupMenuItem(value: 'appointments', child: Text('PDF: Rezervacije')),
+              PopupMenuItem(value: 'revenue', child: Text('PDF: Prihodi')),
+            ],
           )
         ],
       ),
-      body: _isLoading 
+      body: _isLoading
           ? Center(child: CircularProgressIndicator())
-          : _stats == null 
+          : _stats == null
               ? Center(child: Text('Greška pri učitavanju podataka.'))
               : SingleChildScrollView(
                   padding: EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Summary Cards
+
                       Row(
                         children: [
                           _buildStatCard('Ukupno Korisnika', _stats!['totalUsers'].toString(), Icons.people, Colors.blue),
@@ -89,8 +107,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         ],
                       ),
                       SizedBox(height: 32),
-                      
-                      // Chart Section
+
+
                       Text('Rast broja korisnika (po mjesecima)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       SizedBox(height: 16),
                       Container(
@@ -141,12 +159,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 ),
     );
   }
-  
+
   List<FlSpot> _getSpots() {
     List<dynamic> monthly = _stats!['monthlyRegistrations'] ?? [];
     List<FlSpot> spots = [];
-    
-    // Default 0 spots if empty
+
+
     if (monthly.isEmpty) {
        return [FlSpot(1, 0), FlSpot(12, 0)];
     }

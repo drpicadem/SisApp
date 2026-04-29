@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using ŠišAppApi.Models; // Adjust namespace
-using ŠišAppApi.Services; // Adjust namespace
+using ŠišAppApi.Models;
+using ŠišAppApi.Services;
+using ŠišAppApi.Services.Interfaces;
 
 namespace ŠišAppApi.Controllers
 {
@@ -13,10 +14,12 @@ namespace ŠišAppApi.Controllers
         where TUpdate : class
     {
         protected readonly ICRUDService<T, TSearch, TInsert, TUpdate> _service;
+        protected readonly ICurrentUserService _currentUser;
 
-        public BaseCRUDController(ICRUDService<T, TSearch, TInsert, TUpdate> service)
+        public BaseCRUDController(ICRUDService<T, TSearch, TInsert, TUpdate> service, ICurrentUserService currentUser)
         {
             _service = service;
+            _currentUser = currentUser;
         }
 
         [HttpGet]
@@ -62,18 +65,12 @@ namespace ŠišAppApi.Controllers
         }
         protected int GetUserId()
         {
-            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
-            {
-                 // Fallback or return 0
-                 return 0;
-            }
-            return userId;
+            return _currentUser.UserId ?? 0;
         }
 
         protected string GetUserRole()
         {
-             return User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "";
+             return _currentUser.Role;
         }
     }
 }

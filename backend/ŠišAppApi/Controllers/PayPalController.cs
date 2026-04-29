@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using System.Text;
-using System.Text.Json;
 using System.ComponentModel.DataAnnotations;
+using ŠišAppApi.Services.Interfaces;
 
 namespace ŠišAppApi.Controllers;
 
@@ -13,166 +12,111 @@ using Microsoft.AspNetCore.Authorization;
 public class PayPalController : ControllerBase
 {
     private readonly IConfiguration _config;
-    private readonly HttpClient _httpClient;
     private readonly ILogger<PayPalController> _logger;
+    private readonly IPayPalOrderService _payPalOrderService;
 
-    public PayPalController(IConfiguration config, ILogger<PayPalController> logger)
+    public PayPalController(
+        IConfiguration config,
+        ILogger<PayPalController> logger,
+        IPayPalOrderService payPalOrderService)
     {
         _config = config;
-        _httpClient = new HttpClient();
         _logger = logger;
+        _payPalOrderService = payPalOrderService;
     }
 
-    [HttpPost("create-payment")]
-    public async Task<IActionResult> CreatePayment([FromBody] PayPalPaymentRequest request)
+    [HttpGet("mobile-config")]
+    public IActionResult GetMobileConfig()
+    {
+        var clientId = _config["PayPal:ClientId"];
+        if (string.IsNullOrWhiteSpace(clientId))
+            return StatusCode(500, new { error = "PayPal ClientId is not configured" });
+
+        var environment = _config["PayPal:Environment"] ?? "sandbox";
+        return Ok(new { clientId, environment = environment.ToLowerInvariant() });
+    }
+
+    [HttpPost("create-order")]
+    public async Task<IActionResult> CreateOrder([FromBody] PayPalCreateOrderRequest request)
     {
         try
         {
-            var clientId = _config["PayPal:ClientId"] ?? 
-                throw new InvalidOperationException("PayPal ClientId is not configured");
-            var secret = _config["PayPal:Secret"] ?? 
-                throw new InvalidOperationException("PayPal Secret is not configured");
-            var baseUrl = _config["PayPal:BaseUrl"] ?? 
-                throw new InvalidOperationException("PayPal BaseUrl is not configured");
+            if (!request.AppointmentId.HasValue)
+                return BadRequest("AppointmentId je obavezan.");
 
-            var authToken = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{clientId}:{secret}"));
-
-            // 1. Get access token
-            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", authToken);
-            var tokenRequest = new StringContent("grant_type=client_credentials", Encoding.UTF8, "application/x-www-form-urlencoded");
-            var tokenResponse = await _httpClient.PostAsync($"{baseUrl}/v1/oauth2/token", tokenRequest);
-            
-            if (!tokenResponse.IsSuccessStatusCode)
-            {
-                _logger.LogError("Failed to get PayPal access token. Status: {Status}, Response: {Response}", 
-                    tokenResponse.StatusCode, await tokenResponse.Content.ReadAsStringAsync());
-                return StatusCode(500, "Failed to authenticate with PayPal");
-            }
-
-            var tokenJson = await tokenResponse.Content.ReadAsStringAsync();
-            var accessToken = JsonDocument.Parse(tokenJson).RootElement.GetProperty("access_token").GetString();
-
-            // 2. Create payment
-            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
-
-            var paymentBody = new
-            {
-                intent = "CAPTURE",
-                purchase_units = new[]
-                {
-                    new {
-                        amount = new {
-                            currency_code = request.Currency,
-                            value = request.Amount.ToString("0.00")
-                        },
-                        description = request.ServiceDescription,
-                        custom_id = request.AppointmentId?.ToString()
-                    }
-                },
-                application_context = new
-                {
-                    return_url = request.ReturnUrl,
-                    cancel_url = request.CancelUrl,
-                    brand_name = "ŠišApp",
-                    locale = "hr-HR",
-                    landing_page = "LOGIN",
-                    user_action = "PAY_NOW"
-                }
-            };
-
-            var content = new StringContent(JsonSerializer.Serialize(paymentBody), Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync($"{baseUrl}/v2/checkout/orders", content);
-            var responseBody = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogError("Failed to create PayPal order. Status: {Status}, Response: {Response}", 
-                    response.StatusCode, responseBody);
-                return StatusCode(500, "Failed to create PayPal order");
-            }
-
-            return Content(responseBody, "application/json");
+            var orderId = await _payPalOrderService.CreateOrderAsync(request.AppointmentId.Value);
+            return Ok(new { orderId });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Failed to authenticate with PayPal", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogError(ex, "PayPal authentication failed while creating order");
+            return StatusCode(500, new { error = "PayPal sandbox kredencijali nisu validni. Provjerite PayPal ClientId i Secret u .env." });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating PayPal payment");
+            _logger.LogError(ex, "Error creating PayPal order");
             return StatusCode(500, "Internal server error");
         }
     }
 
-    [HttpPost("capture-payment")]
-    public async Task<IActionResult> CapturePayment([FromBody] CapturePaymentRequest request)
+    [HttpPost("capture-order")]
+    public async Task<IActionResult> CaptureOrder([FromBody] CaptureOrderRequest request)
     {
         try
         {
-            var clientId = _config["PayPal:ClientId"] ?? 
-                throw new InvalidOperationException("PayPal ClientId is not configured");
-            var secret = _config["PayPal:Secret"] ?? 
-                throw new InvalidOperationException("PayPal Secret is not configured");
-            var baseUrl = _config["PayPal:BaseUrl"] ?? 
-                throw new InvalidOperationException("PayPal BaseUrl is not configured");
+            if (!request.AppointmentId.HasValue)
+                return BadRequest("AppointmentId je obavezan.");
 
-            var authToken = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{clientId}:{secret}"));
+            var result = await _payPalOrderService.CaptureOrderAsync(request.OrderId, request.AppointmentId.Value);
 
-            // 1. Get access token
-            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", authToken);
-            var tokenRequest = new StringContent("grant_type=client_credentials", Encoding.UTF8, "application/x-www-form-urlencoded");
-            var tokenResponse = await _httpClient.PostAsync($"{baseUrl}/v1/oauth2/token", tokenRequest);
-            
-            if (!tokenResponse.IsSuccessStatusCode)
-            {
-                _logger.LogError("Failed to get PayPal access token. Status: {Status}, Response: {Response}", 
-                    tokenResponse.StatusCode, await tokenResponse.Content.ReadAsStringAsync());
-                return StatusCode(500, "Failed to authenticate with PayPal");
-            }
+            if (result.AppointmentNotFound)
+                return NotFound(new { error = "Appointment not found" });
 
-            var tokenJson = await tokenResponse.Content.ReadAsStringAsync();
-            var accessToken = JsonDocument.Parse(tokenJson).RootElement.GetProperty("access_token").GetString();
+            if (result.AlreadyPaid)
+                return Ok(new { status = "Paid", alreadyPaid = true });
 
-            // 2. Capture payment
-            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
-            var response = await _httpClient.PostAsync($"{baseUrl}/v2/checkout/orders/{request.OrderId}/capture", null);
-            var responseBody = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogError("Failed to capture PayPal payment. Status: {Status}, Response: {Response}", 
-                    response.StatusCode, responseBody);
-                return StatusCode(500, "Failed to capture payment");
-            }
-
-            return Content(responseBody, "application/json");
+            return Ok(new { status = "Paid", alreadyPaid = false, transactionId = result.CaptureId });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Failed to authenticate with PayPal", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogError(ex, "PayPal authentication failed while capturing order");
+            return StatusCode(500, new { error = "PayPal sandbox kredencijali nisu validni. Provjerite PayPal ClientId i Secret u .env." });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error capturing PayPal payment");
+            _logger.LogError(ex, "Error capturing PayPal order");
             return StatusCode(500, "Internal server error");
         }
+    }
+
+    [HttpPost("cancel-pending")]
+    public async Task<IActionResult> CancelPending([FromBody] CancelPendingOrderRequest request)
+    {
+        if (!request.AppointmentId.HasValue)
+            return BadRequest("AppointmentId je obavezan.");
+
+        var result = await _payPalOrderService.CancelPendingAsync(request.AppointmentId.Value);
+        return Ok(new { status = result.HadPending ? "Cancelled" : "NoPending" });
     }
 }
 
-public class PayPalPaymentRequest
+public class PayPalCreateOrderRequest
 {
     [Required]
-    public decimal Amount { get; set; }
-
-    [Required]
-    public string Currency { get; set; } = "EUR";
-
-    [Required]
-    public string ServiceDescription { get; set; } = string.Empty;
-
-    [Required]
-    public string ReturnUrl { get; set; } = string.Empty;
-
-    [Required]
-    public string CancelUrl { get; set; } = string.Empty;
-
     public int? AppointmentId { get; set; }
 }
 
-public class CapturePaymentRequest
+public class CaptureOrderRequest
 {
     [Required]
     public string OrderId { get; set; } = string.Empty;
-} 
+
+    [Required]
+    public int? AppointmentId { get; set; }
+}
+
+public class CancelPendingOrderRequest
+{
+    [Required]
+    public int? AppointmentId { get; set; }
+}

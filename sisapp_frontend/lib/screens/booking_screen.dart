@@ -33,7 +33,7 @@ class _BookingScreenState extends State<BookingScreen> {
       final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
       if (args != null && args.containsKey('salon')) {
         _selectedSalon = args['salon'] as Salon;
-        // Load barbers/services for this salon immediately
+
         Future.microtask(() {
            if (mounted) {
              context.read<BarberProvider>().loadBarbers(_selectedSalon!.id);
@@ -91,17 +91,17 @@ class _BookingScreenState extends State<BookingScreen> {
           }).toList(),
           onChanged: (value) {
             if (value == null) return;
-            
+
             setState(() {
               _selectedSalon = value;
               _selectedBarber = null;
               _selectedService = null;
               _selectedTimeSlot = null;
             });
-            
+
+             context.read<ServiceProvider>().loadServices(value.id);
              context.read<BarberProvider>().loadBarbers(value.id);
-             context.read<ServiceProvider>().loadServices(value.id); 
-            
+
           },
         );
       },
@@ -114,19 +114,19 @@ class _BookingScreenState extends State<BookingScreen> {
         return DropdownButtonFormField<Service>(
           decoration: InputDecoration(labelText: 'Odaberite Uslugu', border: OutlineInputBorder()),
           value: _selectedService,
-          // IMPORTANT: Ensure _selectedService is actually in the list or null
+
           items: serviceProvider.services.map((service) {
             return DropdownMenuItem(value: service, child: Text('${service.name} (${service.price} KM)'));
           }).toList(),
           onChanged: (value) {
             setState(() {
               _selectedService = value;
+              _selectedBarber = null;
               _selectedTimeSlot = null;
             });
-            if (_selectedBarber != null && value != null) {
-              context.read<BookingProvider>().fetchAvailableSlots(
-                _selectedBarber!.id,
-                _selectedDate,
+            if (_selectedSalon != null && value != null) {
+              context.read<BarberProvider>().loadBarbers(
+                _selectedSalon!.id,
                 serviceId: value.id,
               );
             }
@@ -201,7 +201,7 @@ class _BookingScreenState extends State<BookingScreen> {
      return Consumer<BookingProvider>(
        builder: (context, bookingProvider, child) {
          if (bookingProvider.isLoading) return Center(child: CircularProgressIndicator());
-         
+
          if (bookingProvider.availableSlots.isEmpty) {
            return Text('Nema slobodnih termina za odabrani datum.');
          }
@@ -232,19 +232,19 @@ class _BookingScreenState extends State<BookingScreen> {
        child: ElevatedButton(
          child: Text('POTVRDI REZERVACIJU'),
          style: ElevatedButton.styleFrom(padding: EdgeInsets.symmetric(vertical: 16)),
-         onPressed: (_selectedSalon != null && _selectedBarber != null && _selectedService != null && _selectedTimeSlot != null) 
-          ? _confirmBooking 
+         onPressed: (_selectedSalon != null && _selectedBarber != null && _selectedService != null && _selectedTimeSlot != null)
+          ? _confirmBooking
           : null,
        ),
      );
   }
 
   void _confirmBooking() {
-    // Parse time
+
     final timeParts = _selectedTimeSlot!.split(':');
     final hour = int.parse(timeParts[0]);
     final minute = int.parse(timeParts[1]);
-    
+
     final appointmentDateTime = DateTime(
       _selectedDate.year,
       _selectedDate.month,
@@ -268,7 +268,7 @@ class _BookingScreenState extends State<BookingScreen> {
       status: 'Pending',
     );
 
-    // Navigate to Review Screen
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => ReservationReviewScreen(

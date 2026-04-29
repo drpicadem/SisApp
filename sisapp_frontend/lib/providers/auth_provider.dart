@@ -23,7 +23,7 @@ class AuthProvider extends ChangeNotifier {
   int? get userId => _userId;
   String? get email => _email;
 
-  bool get isAdmin => _role == 'Admin' || _role == 'SuperAdmin';
+  bool get isAdmin => _role == 'Admin';
   bool get isBarber => _role == 'Barber';
   bool get isCustomer => _role == 'User';
 
@@ -42,7 +42,7 @@ class AuthProvider extends ChangeNotifier {
         await _saveToken(response);
         _isLoading = false;
         notifyListeners();
-        return null; // Success
+        return null;
       } else {
         _isLoading = false;
         notifyListeners();
@@ -52,7 +52,7 @@ class AuthProvider extends ChangeNotifier {
       print('Login error: $e');
       _isLoading = false;
       notifyListeners();
-      return 'Došlo je do greške prilikom prijave: ${e.toString()}';
+      return e.toString().replaceAll('Exception: ', '');
     }
   }
 
@@ -85,7 +85,7 @@ class AuthProvider extends ChangeNotifier {
         await _saveToken(response);
         _isLoading = false;
         notifyListeners();
-        return null; // Success
+        return null;
       } else {
         _isLoading = false;
         notifyListeners();
@@ -101,30 +101,30 @@ class AuthProvider extends ChangeNotifier {
   void _decodeToken(String token) {
     try {
       Map<String, dynamic> decodedToken = JwtDecoder.decode(token);
-      
-      // Extract Role (handle both String and List<dynamic>)
+
+
       var roleClaim = decodedToken['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ?? decodedToken['role'];
       if (roleClaim is List) {
         _role = roleClaim.isNotEmpty ? roleClaim.first.toString() : null;
       } else {
         _role = roleClaim?.toString();
       }
-      
-      // Extract User ID (nameid)
+
+
       final userIdStr = decodedToken['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ?? decodedToken['nameid'];
       if (userIdStr != null) {
         _userId = int.tryParse(userIdStr.toString());
       }
 
-      // Extract Username (unique_name or sub)
-      _username = decodedToken['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'] ?? 
-                  decodedToken['unique_name'] ?? 
+
+      _username = decodedToken['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'] ??
+                  decodedToken['unique_name'] ??
                   decodedToken['sub'];
 
-      // Extract Email
-      _email = decodedToken['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] ?? 
+
+      _email = decodedToken['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] ??
                decodedToken['email'];
-      
+
       print('User Role: $_role, ID: $_userId, Username: $_username, Email: $_email');
     } catch (e) {
       print('Error decoding token: $e');
@@ -132,12 +132,27 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    final accessToken = _tokenResponse?.token;
+    final refreshToken = _tokenResponse?.refreshToken;
+    if (accessToken != null && accessToken.isNotEmpty) {
+      await _apiService.revokeToken(
+        accessToken: accessToken,
+        refreshToken: (refreshToken != null && refreshToken.isNotEmpty) ? refreshToken : null,
+      );
+    }
+
     _tokenResponse = null;
     _role = null;
     _userId = null;
     _username = null;
     _email = null;
     await _clearToken();
+    notifyListeners();
+  }
+
+  void updateProfileClaims({required String username, required String email}) {
+    _username = username;
+    _email = email;
     notifyListeners();
   }
 

@@ -2,13 +2,17 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/image_service.dart';
+import '../utils/error_mapper.dart';
 
 class ImagePickerWidget extends StatefulWidget {
   final String? currentImageUrl;
-  final String token;
-  final String imageType;
+  final String? token;
+  final String? imageType;
   final int? entityId;
   final String? entityType;
+  final bool deferUpload;
+  final Function(File file)? onFileSelected;
+  final Future<Map<String, dynamic>?> Function(File file)? customUpload;
   final Function(Map<String, dynamic> imageData)? onImageUploaded;
   final double size;
   final bool isCircular;
@@ -16,10 +20,13 @@ class ImagePickerWidget extends StatefulWidget {
   const ImagePickerWidget({
     super.key,
     this.currentImageUrl,
-    required this.token,
-    required this.imageType,
+    this.token,
+    this.imageType,
     this.entityId,
     this.entityType,
+    this.deferUpload = false,
+    this.onFileSelected,
+    this.customUpload,
     this.onImageUploaded,
     this.size = 120,
     this.isCircular = true,
@@ -43,7 +50,7 @@ class _ImagePickerWidgetState extends State<ImagePickerWidget> {
           onTap: _isUploading ? null : _showPickerOptions,
           child: Stack(
             children: [
-              // Image display
+
               widget.isCircular
                   ? CircleAvatar(
                       radius: widget.size / 2,
@@ -70,7 +77,7 @@ class _ImagePickerWidgetState extends State<ImagePickerWidget> {
                           ? Icon(Icons.image, size: widget.size / 2, color: Colors.grey[600])
                           : null,
                     ),
-              // Camera icon overlay
+
               Positioned(
                 bottom: 0,
                 right: 0,
@@ -88,7 +95,7 @@ class _ImagePickerWidgetState extends State<ImagePickerWidget> {
                   ),
                 ),
               ),
-              // Loading overlay
+
               if (_isUploading)
                 Positioned.fill(
                   child: Container(
@@ -120,7 +127,11 @@ class _ImagePickerWidgetState extends State<ImagePickerWidget> {
     }
     final url = _uploadedUrl ?? widget.currentImageUrl;
     if (url != null && url.isNotEmpty) {
-      return NetworkImage(ImageService.getFullImageUrl(url));
+      final imageUrl = ImageService.getFullImageUrl(url);
+      return NetworkImage(
+        imageUrl,
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      );
     }
     return null;
   }
@@ -166,20 +177,31 @@ class _ImagePickerWidgetState extends State<ImagePickerWidget> {
 
       setState(() {
         _selectedFile = File(pickedFile.path);
-        _isUploading = true;
       });
 
-      final result = await ImageService.uploadImage(
-        _selectedFile!,
-        widget.token,
-        imageType: widget.imageType,
-        entityId: widget.entityId,
-        entityType: widget.entityType,
-      );
+      if (widget.deferUpload) {
+        widget.onFileSelected?.call(_selectedFile!);
+        return;
+      }
+
+      setState(() => _isUploading = true);
+
+      final result = widget.customUpload != null
+          ? await widget.customUpload!(_selectedFile!)
+          : await ImageService.uploadImage(
+              _selectedFile!,
+              widget.token ?? '',
+              imageType: widget.imageType,
+              entityId: widget.entityId,
+              entityType: widget.entityType,
+            );
 
       if (result != null) {
+        final uploadedId = result['id']?.toString();
         setState(() {
-          _uploadedUrl = result['url'];
+          _uploadedUrl = uploadedId != null && uploadedId.isNotEmpty
+              ? '/api/Images/file/$uploadedId'
+              : result['url']?.toString();
           _isUploading = false;
         });
         widget.onImageUploaded?.call(result);
@@ -187,13 +209,17 @@ class _ImagePickerWidgetState extends State<ImagePickerWidget> {
         setState(() => _isUploading = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Greška pri uploadu slike')),
+            const SnackBar(content: Text('Upload slike nije uspio. Provjerite format slike i pokušajte ponovo.')),
           );
         }
       }
     } catch (e) {
       setState(() => _isUploading = false);
-      print('Image picker error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ErrorMapper.toUserMessage(e, fallback: 'Odabir slike nije uspio. Pokušajte ponovo.'))),
+        );
+      }
     }
   }
 }

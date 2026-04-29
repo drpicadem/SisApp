@@ -22,9 +22,7 @@ public class RegisterDto
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Lozinka je obavezna")]
-    [StringLength(100, MinimumLength = 6, ErrorMessage = "Lozinka mora imati između 6 i 100 znakova")]
-    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{6,}$",
-        ErrorMessage = "Lozinka mora sadržavati najmanje jedno veliko slovo, jedno malo slovo, jedan broj i jedan poseban znak")]
+    [StringLength(100, MinimumLength = 4, ErrorMessage = "Lozinka mora imati između 4 i 100 znakova")]
     public string Password { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Potvrda lozinke je obavezna")]

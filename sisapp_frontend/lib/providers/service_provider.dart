@@ -6,6 +6,11 @@ import '../providers/auth_provider.dart';
 class ServiceProvider extends ChangeNotifier {
   List<Service> _services = [];
   bool _isLoading = false;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _page = 1;
+  final int _pageSize = 20;
+  int? _currentSalonId;
   final ApiService _apiService = ApiService();
   final AuthProvider? _authProvider;
 
@@ -13,20 +18,48 @@ class ServiceProvider extends ChangeNotifier {
 
   List<Service> get services => _services;
   bool get isLoading => _isLoading;
+  bool get isLoadingMore => _isLoadingMore;
+  bool get hasMore => _hasMore;
 
-  Future<void> loadServices(int salonId) async {
+  Future<void> loadServices(int salonId, {bool refresh = true}) async {
     if (_authProvider?.tokenResponse == null) return;
-    
-    _isLoading = true;
-    notifyListeners();
+
+    if (refresh || _currentSalonId != salonId) {
+      _currentSalonId = salonId;
+      _page = 1;
+      _hasMore = true;
+      _services = [];
+      _isLoading = true;
+      notifyListeners();
+    } else {
+      if (!_hasMore || _isLoadingMore) return;
+      _isLoadingMore = true;
+      notifyListeners();
+    }
 
     try {
-      _services = await _apiService.getServices(salonId, _authProvider!.tokenResponse!.token);
+      final newServices = await _apiService.getServices(
+        salonId,
+        _authProvider!.tokenResponse!.token,
+        page: _page,
+        pageSize: _pageSize,
+      );
+      if (newServices.length < _pageSize) {
+        _hasMore = false;
+      }
+
+      if (_page == 1) {
+        _services = newServices;
+      } else {
+        _services.addAll(newServices);
+      }
+      _page++;
     } catch (e) {
       print('Error loading services: $e');
     }
 
     _isLoading = false;
+    _isLoadingMore = false;
     notifyListeners();
   }
 
@@ -39,7 +72,7 @@ class ServiceProvider extends ChangeNotifier {
     final savedService = await _apiService.createService(service, _authProvider!.tokenResponse!.token);
 
     if (savedService != null) {
-      _services.add(savedService);
+      _services.insert(0, savedService);
     }
 
     _isLoading = false;

@@ -4,7 +4,9 @@ import '../../providers/auth_provider.dart';
 import '../../providers/barber_provider.dart';
 import '../../providers/salon_provider.dart';
 import '../../models/salon.dart';
+import '../../models/city.dart';
 import '../../services/api_service.dart';
+import '../../utils/form_validators.dart';
 
 class EditSalonScreen extends StatefulWidget {
   @override
@@ -17,13 +19,13 @@ class _EditSalonScreenState extends State<EditSalonScreen> {
 
   final _nameController = TextEditingController();
   final _addressController = TextEditingController();
-  final _cityController = TextEditingController();
   final _phoneController = TextEditingController();
   final _postalCodeController = TextEditingController();
-  final _countryController = TextEditingController();
   final _websiteController = TextEditingController();
 
   Salon? _currentSalon;
+  List<City> _cities = [];
+  int? _selectedCityId;
 
   @override
   void initState() {
@@ -38,25 +40,24 @@ class _EditSalonScreenState extends State<EditSalonScreen> {
     final authProvider = context.read<AuthProvider>();
     final token = authProvider.tokenResponse?.token ?? '';
 
-    // Znamo da je korisnik Barber kad pristupa ovom ekranu
+
     await barberProvider.loadMyBarberProfile();
 
     if (barberProvider.myBarberProfile != null) {
       final salonId = barberProvider.myBarberProfile!.salonId;
-      
-      // Fetch full salon data directly by ID (includes PostalCode, Country, Website)
+
       try {
         final apiService = ApiService();
+        _cities = await apiService.getCities(token);
         _currentSalon = await apiService.getSalonById(salonId, token);
-        
+
         if (_currentSalon != null) {
-          // Puni kontrole podacima
+
           _nameController.text = _currentSalon!.name;
           _addressController.text = _currentSalon!.address;
-          _cityController.text = _currentSalon!.city;
+          _selectedCityId = _currentSalon!.cityId > 0 ? _currentSalon!.cityId : null;
           _phoneController.text = _currentSalon!.phone;
           _postalCodeController.text = _currentSalon!.postalCode;
-          _countryController.text = _currentSalon!.country;
           _websiteController.text = _currentSalon?.website ?? '';
         }
       } catch (e) {
@@ -80,10 +81,10 @@ class _EditSalonScreenState extends State<EditSalonScreen> {
       id: _currentSalon!.id,
       name: _nameController.text,
       address: _addressController.text,
-      city: _cityController.text,
+      cityId: _selectedCityId ?? 0,
+      city: _cities.firstWhere((c) => c.id == (_selectedCityId ?? 0)).name,
       phone: _phoneController.text,
       postalCode: _postalCodeController.text,
-      country: _countryController.text,
       website: _websiteController.text.isEmpty ? null : _websiteController.text,
       imageIds: _currentSalon!.imageIds,
       employeeCount: _currentSalon!.employeeCount,
@@ -99,10 +100,16 @@ class _EditSalonScreenState extends State<EditSalonScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(success ? 'Postavke salona sačuvane!' : 'Greška pri spašavanju.')),
+        SnackBar(
+          content: Text(
+            success
+                ? 'Postavke salona sačuvane!'
+                : 'Spašavanje postavki salona nije uspjelo. Provjerite unesene podatke.',
+          ),
+        ),
       );
       if (success) {
-         Navigator.pop(context); // Povratak na dashboard nakon edita
+         Navigator.pop(context);
       }
     }
   }
@@ -114,7 +121,7 @@ class _EditSalonScreenState extends State<EditSalonScreen> {
         title: Text('Postavke Salona'),
         backgroundColor: Colors.blue[800],
       ),
-      body: _isLoading 
+      body: _isLoading
         ? Center(child: CircularProgressIndicator())
         : _currentSalon == null
           ? Center(child: Text('Nije moguće učitati podatke o salonu.'))
@@ -136,22 +143,19 @@ class _EditSalonScreenState extends State<EditSalonScreen> {
                         TextFormField(
                           controller: _nameController,
                           decoration: InputDecoration(labelText: 'Naziv Salona', border: OutlineInputBorder(), prefixIcon: Icon(Icons.store)),
-                          validator: (v) => v!.isEmpty ? 'Obavezno polje' : null,
+                          validator: FormValidators.salonName,
                         ),
                         SizedBox(height: 16),
                         TextFormField(
                           controller: _phoneController,
                           decoration: InputDecoration(labelText: 'Telefon', border: OutlineInputBorder(), prefixIcon: Icon(Icons.phone)),
-                          validator: (v) {
-                            if (v == null || v.isEmpty) return 'Obavezno polje';
-                            if (!RegExp(r'^\+?[0-9]{6,15}$').hasMatch(v)) return 'Nevažeći format telefona';
-                            return null;
-                          },
+                          validator: FormValidators.phone,
                         ),
                         SizedBox(height: 16),
                         TextFormField(
                           controller: _websiteController,
                           decoration: InputDecoration(labelText: 'Web stranica (opciono)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.language)),
+                          validator: FormValidators.websiteOptional,
                         ),
                         SizedBox(height: 24),
                         Text('Lokacija', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue[900])),
@@ -160,16 +164,30 @@ class _EditSalonScreenState extends State<EditSalonScreen> {
                         TextFormField(
                           controller: _addressController,
                           decoration: InputDecoration(labelText: 'Adresa', border: OutlineInputBorder(), prefixIcon: Icon(Icons.location_on)),
-                          validator: (v) => v!.isEmpty ? 'Obavezno polje' : null,
+                          validator: FormValidators.address,
                         ),
                         SizedBox(height: 16),
                         Row(
                           children: [
                             Expanded(
-                              child: TextFormField(
-                                controller: _cityController,
+                              child: DropdownButtonFormField<int>(
+                                value: _selectedCityId,
+                                isExpanded: true,
                                 decoration: InputDecoration(labelText: 'Grad', border: OutlineInputBorder()),
-                                validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                                items: _cities
+                                    .map(
+                                      (city) => DropdownMenuItem<int>(
+                                        value: city.id,
+                                        child: Text(city.name, overflow: TextOverflow.ellipsis),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (value) {
+                                  setState(() {
+                                    _selectedCityId = value;
+                                  });
+                                },
+                                validator: (value) => value == null ? 'Odaberite grad' : null,
                               ),
                             ),
                             SizedBox(width: 16),
@@ -177,16 +195,10 @@ class _EditSalonScreenState extends State<EditSalonScreen> {
                               child: TextFormField(
                                 controller: _postalCodeController,
                                 decoration: InputDecoration(labelText: 'Poštanski broj', border: OutlineInputBorder()),
-                                validator: (v) => v!.isEmpty ? 'Obavezno' : null,
+                                validator: FormValidators.postalCode,
                               ),
                             ),
                           ],
-                        ),
-                        SizedBox(height: 16),
-                        TextFormField(
-                          controller: _countryController,
-                          decoration: InputDecoration(labelText: 'Država', border: OutlineInputBorder(), prefixIcon: Icon(Icons.public)),
-                          validator: (v) => v!.isEmpty ? 'Obavezno polje' : null,
                         ),
                         SizedBox(height: 32),
                         SizedBox(

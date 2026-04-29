@@ -1,6 +1,7 @@
 class Salon {
   final int id;
   final String name;
+  final int cityId;
   final String city;
   final String address;
   final String phone;
@@ -8,7 +9,6 @@ class Salon {
   final double rating;
 
   final String postalCode;
-  final String country;
   final String? website;
   final String? imageIds;
   final double? latitude;
@@ -19,11 +19,11 @@ class Salon {
   Salon({
     required this.id,
     required this.name,
+    required this.cityId,
     required this.city,
     required this.address,
     required this.phone,
     required this.postalCode,
-    required this.country,
     this.website,
     this.imageIds,
     this.latitude,
@@ -38,11 +38,11 @@ class Salon {
     return Salon(
       id: (json['id'] as num?)?.toInt() ?? 0,
       name: json['name'] ?? '',
+      cityId: (json['cityId'] as num?)?.toInt() ?? 0,
       city: json['city'] ?? '',
       address: json['address'] ?? '',
       phone: json['phone'] ?? '',
       postalCode: json['postalCode'] ?? '',
-      country: json['country'] ?? '',
       website: json['website'],
       imageIds: json['imageIds'],
       employeeCount: (json['employeeCount'] as num?)?.toInt() ?? 0,
@@ -58,14 +58,14 @@ class Salon {
     return {
       'id': id,
       'name': name,
+      'cityId': cityId,
       'city': city,
       'address': address,
       'phone': phone,
       'postalCode': postalCode,
-      'country': country,
       'website': website,
       'imageIds': imageIds,
-      // Default values for backend
+
       'rating': rating,
       'latitude': latitude,
       'longitude': longitude,

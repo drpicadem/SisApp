@@ -8,5 +8,6 @@ namespace ŠišAppApi.Services.Interfaces
     {
         Task<SalonDto> ToggleStatusAsync(int id);
         Task<SalonDto> UpdateSalonImageAsync(int salonId, string imageId);
+        Task<bool> CanBarberUpdateSalonAsync(int userId, int salonId);
     }
 }

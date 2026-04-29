@@ -1,4 +1,4 @@
-namespace ŠišAppApi.Filters // Or Exceptions
+namespace ŠišAppApi.Filters
 {
     public class UserException : Exception
     {

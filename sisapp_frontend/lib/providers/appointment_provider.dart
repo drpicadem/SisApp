@@ -9,8 +9,8 @@ class AppointmentProvider extends ChangeNotifier {
 
   bool _isLoading = false;
   List<Appointment> _appointments = [];
-  
-  // Pagination
+
+
   int _page = 1;
   final int _pageSize = 10;
   bool _hasMore = true;
@@ -25,11 +25,12 @@ class AppointmentProvider extends ChangeNotifier {
 
   Future<void> fetchAppointments({
     bool refresh = false,
-    bool? isActive, // true=Active, false=History
+    bool? isActive,
     bool? isPaid,
+    int? prioritizeAppointmentId,
   }) async {
     if (_authProvider?.tokenResponse == null) return;
-    
+
     if (refresh) {
       _page = 1;
       _hasMore = true;
@@ -60,7 +61,15 @@ class AppointmentProvider extends ChangeNotifier {
       } else {
         _appointments.addAll(newAppointments);
       }
-      
+
+      if (prioritizeAppointmentId != null) {
+        final index = _appointments.indexWhere((a) => a.id == prioritizeAppointmentId);
+        if (index > 0) {
+          final prioritized = _appointments.removeAt(index);
+          _appointments.insert(0, prioritized);
+        }
+      }
+
       _page++;
     } catch (e) {
       print('Error fetching appointments: $e');
@@ -76,7 +85,7 @@ class AppointmentProvider extends ChangeNotifier {
     if (_authProvider?.tokenResponse == null) return false;
 
     bool success = await _apiService.cancelAppointment(id, _authProvider!.tokenResponse!.token);
-    
+
     if (success) {
       final index = _appointments.indexWhere((a) => a.id == id);
       if (index != -1) {
@@ -84,7 +93,7 @@ class AppointmentProvider extends ChangeNotifier {
       }
       notifyListeners();
     }
-    
+
     return success;
   }
 }

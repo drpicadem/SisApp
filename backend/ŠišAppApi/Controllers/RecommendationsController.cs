@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
-using ŠišAppApi.Services;
+using ŠišAppApi.Services.Interfaces;
 
 namespace ŠišAppApi.Controllers;
 
@@ -10,27 +9,25 @@ namespace ŠišAppApi.Controllers;
 [Authorize]
 public class RecommendationsController : ControllerBase
 {
-    private readonly RecommendationService _recommendationService;
+    private readonly IRecommendationService _recommendationService;
+    private readonly ICurrentUserService _currentUser;
 
-    public RecommendationsController(RecommendationService recommendationService)
+    public RecommendationsController(IRecommendationService recommendationService, ICurrentUserService currentUser)
     {
         _recommendationService = recommendationService;
+        _currentUser = currentUser;
     }
 
-    /// <summary>
-    /// GET /api/Recommendations
-    /// Returns personalized service recommendations for the authenticated user.
-    /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetRecommendations()
+    public async Task<IActionResult> GetRecommendations([FromQuery] int top = 10)
     {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (userIdClaim == null || !int.TryParse(userIdClaim, out var userId))
-        {
-            return Unauthorized();
-        }
+        if (top < 1) top = 10;
+        if (top > 50) top = 50;
 
-        var recommendations = await _recommendationService.GetRecommendations(userId);
-        return Ok(recommendations);
+        if (!_currentUser.UserId.HasValue)
+            return Unauthorized();
+
+        var recommendations = await _recommendationService.GetRecommendations(_currentUser.UserId.Value);
+        return Ok(recommendations.Take(top));
     }
 }

@@ -1,14 +1,14 @@
-using ŠišAppApi.Models; 
+using ŠišAppApi.Models;
 using ŠišAppApi.Models.DTOs;
-using ŠišAppApi.Models.Requests; 
-using ŠišAppApi.Models.SearchObjects; 
+using ŠišAppApi.Models.Requests;
+using ŠišAppApi.Models.SearchObjects;
 
 namespace ŠišAppApi.Services
 {
     public interface IAppointmentService : ICRUDService<AppointmentDto, AppointmentSearchObject, AppointmentInsertRequest, AppointmentUpdateRequest>
     {
         Task<IEnumerable<string>> GetAvailableSlots(int barberId, DateOnly date, int? serviceId = null);
-        Task<AppointmentDto> Insert(AppointmentInsertRequest request, int userId); 
-        Task<AppointmentDto> Cancel(int id, int userId, string userRole); 
+        Task<AppointmentDto> Insert(AppointmentInsertRequest request, int userId);
+        Task<AppointmentDto> Cancel(int id, int userId, string userRole, string? reason = null);
     }
 }
