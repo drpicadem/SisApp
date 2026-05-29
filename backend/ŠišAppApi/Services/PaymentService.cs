@@ -21,18 +21,16 @@ public class PaymentService : IPaymentService
         _paymentFinalizationService = paymentFinalizationService;
     }
 
-    public async Task<IActionResult> CancelPending(CancelPendingStripeRequest request)
+    public async Task<IActionResult> CancelPending(int appointmentId, int userId)
     {
-        if (!request.AppointmentId.HasValue)
-        {
-            return new BadRequestObjectResult(new { error = "AppointmentId je obavezan." });
-        }
-
-        var appointment = await _context.Appointments.FindAsync(request.AppointmentId.Value);
+        var appointment = await _context.Appointments.FindAsync(appointmentId);
         if (appointment == null)
         {
             return new NotFoundObjectResult(new { error = "Appointment not found" });
         }
+
+        if (appointment.UserId != userId)
+            throw new UnauthorizedAccessException("Nemate pristup ovom terminu.");
 
         if (appointment.PaymentStatus == AppointmentPaymentStatuses.Paid)
         {
@@ -40,7 +38,7 @@ public class PaymentService : IPaymentService
         }
 
         var pending = await _context.Payments
-            .FirstOrDefaultAsync(p => p.AppointmentId == request.AppointmentId.Value
+            .FirstOrDefaultAsync(p => p.AppointmentId == appointmentId
                                       && p.Status == PaymentStatuses.Pending
                                       && p.Method == PaymentMethods.Stripe);
         if (pending == null)

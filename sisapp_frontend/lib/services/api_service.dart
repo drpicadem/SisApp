@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/login_request.dart';
 import '../models/token_response.dart';
@@ -23,6 +24,14 @@ import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 class UnauthorizedException implements Exception {
   final String message;
   UnauthorizedException([this.message = 'Sesija je istekla. Prijavite se ponovo.']);
+
+  @override
+  String toString() => message;
+}
+
+class ForbiddenException implements Exception {
+  final String message;
+  ForbiddenException([this.message = 'Nemate dozvolu za ovu akciju.']);
 
   @override
   String toString() => message;
@@ -94,6 +103,52 @@ class ApiService {
     }
 
     throw UnauthorizedException();
+  }
+
+  Never _throwForFailedResponse(http.Response response, String fallback) {
+    if (response.statusCode == 403) {
+      throw ForbiddenException(
+        _extractApiError(response.body, 'Nemate dozvolu za ovu akciju.'),
+      );
+    }
+    if (response.statusCode >= 500) {
+      throw Exception(
+        _extractApiError(response.body, 'Serverska greška. Pokušajte ponovo kasnije.'),
+      );
+    }
+    throw Exception(_extractApiError(response.body, fallback));
+  }
+
+  List<dynamic> _decodeListBody(dynamic decoded) {
+    if (decoded is List) return decoded;
+    if (decoded is Map<String, dynamic> && decoded['items'] is List) {
+      return decoded['items'] as List<dynamic>;
+    }
+    throw Exception('Neočekivani format odgovora servera.');
+  }
+
+  Future<List<dynamic>> _parseJsonListResponse(
+    http.Response response,
+    String errorFallback, {
+    bool checkAuth = true,
+  }) async {
+    if (checkAuth) {
+      await _handleUnauthorizedResponse(response);
+    }
+
+    if (response.statusCode == 200) {
+      return _decodeListBody(jsonDecode(response.body));
+    }
+
+    _throwForFailedResponse(response, errorFallback);
+  }
+
+  Never _rethrowListError(Object error, String context) {
+    if (error is UnauthorizedException || error is ForbiddenException) {
+      throw error;
+    }
+    if (error is Exception) throw error;
+    throw Exception('$context: $error');
   }
 
 
@@ -182,15 +237,16 @@ class ApiService {
 
   Future<TokenResponse?> register(Map<String, dynamic> data) async {
     try {
-
-      print('=== REGISTER REQUEST ===');
-      data.forEach((key, value) {
-        if (key.toLowerCase().contains('password')) {
-          print('  $key: ****** (length: ${value.toString().length})');
-        } else {
-          print('  $key: $value');
-        }
-      });
+      if (kDebugMode) {
+        print('=== REGISTER REQUEST ===');
+        data.forEach((key, value) {
+          if (key.toLowerCase().contains('password')) {
+            print('  $key: ****** (length: ${value.toString().length})');
+          } else {
+            print('  $key: $value');
+          }
+        });
+      }
 
       final response = await http.post(
         Uri.parse('$baseUrl/Authentication/register'),
@@ -198,9 +254,11 @@ class ApiService {
         body: jsonEncode(data),
       );
 
-      print('=== REGISTER RESPONSE ===');
-      print('  Status: ${response.statusCode}');
-      print('  Body: ${response.body}');
+      if (kDebugMode) {
+        print('=== REGISTER RESPONSE ===');
+        print('  Status: ${response.statusCode}');
+        print('  Body: ${response.body}');
+      }
 
       if (response.statusCode == 200) {
         return TokenResponse.fromJson(jsonDecode(response.body));
@@ -258,16 +316,18 @@ class ApiService {
       );
       await _handleUnauthorizedResponse(response);
 
-      if (response.statusCode == 200) {
-        List<dynamic> body = jsonDecode(response.body);
-        return body.map((dynamic item) => Service.fromJson(item)).toList();
-      }
-      return [];
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje usluga nije uspjelo.',
+      );
+      return body.map((dynamic item) => Service.fromJson(item)).toList();
     } on UnauthorizedException {
       rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get Services error: $e');
-      return [];
+      debugPrint('Get Services error: $e');
+      _rethrowListError(e, 'Učitavanje usluga nije uspjelo');
     }
   }
 
@@ -284,7 +344,7 @@ class ApiService {
       return Service.fromJson(jsonDecode(response.body));
     }
     if (response.statusCode == 400) {
-      throw Exception(_extractApiError(response.body, 'Kreiranje usluge nije uspjelo. Provjerite: naziv (2-80), cijena (0-1000 KM), trajanje (1-600 min).'));
+      throw Exception(_extractApiError(response.body, 'Kreiranje usluge nije uspjelo. Provjerite: naziv (2-80), cijena (0-1000 EUR), trajanje (1-600 min).'));
     }
     throw Exception(_extractApiError(response.body, 'Kreiranje usluge nije uspjelo. Provjerite obavezna polja i format brojeva (npr. 10 ili 10.50).'));
   }
@@ -304,16 +364,18 @@ class ApiService {
       );
       await _handleUnauthorizedResponse(response);
 
-      if (response.statusCode == 200) {
-        List<dynamic> body = jsonDecode(response.body);
-        return body.map((dynamic item) => Barber.fromJson(item)).toList();
-      }
-      return [];
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje frizera nije uspjelo.',
+      );
+      return body.map((dynamic item) => Barber.fromJson(item)).toList();
     } on UnauthorizedException {
       rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get Barbers error: $e');
-      return [];
+      debugPrint('Get Barbers error: $e');
+      _rethrowListError(e, 'Učitavanje frizera nije uspjelo');
     }
   }
 
@@ -407,22 +469,18 @@ class ApiService {
       );
       await _handleUnauthorizedResponse(response);
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        final List<dynamic> body = decoded is List
-            ? decoded
-            : (decoded is Map<String, dynamic> && decoded['items'] is List
-                ? decoded['items'] as List<dynamic>
-                : <dynamic>[]);
-        return body.map((dynamic item) => Salon.fromJson(item)).toList();
-      }
-      print('Get Salons failed: ${response.statusCode} ${response.body}');
-      return [];
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje salona nije uspjelo.',
+      );
+      return body.map((dynamic item) => Salon.fromJson(item)).toList();
     } on UnauthorizedException {
       rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get Salons error: $e');
-      return [];
+      debugPrint('Get Salons error: $e');
+      _rethrowListError(e, 'Učitavanje salona nije uspjelo');
     }
   }
 
@@ -455,19 +513,18 @@ class ApiService {
           'Authorization': 'Bearer $token',
         },
       );
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        final List<dynamic> body = decoded is List
-            ? decoded
-            : (decoded is Map<String, dynamic> && decoded['items'] is List
-                ? decoded['items'] as List<dynamic>
-                : <dynamic>[]);
-        return body.map((item) => City.fromJson(item as Map<String, dynamic>)).toList();
-      }
-      return [];
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje gradova nije uspjelo.',
+      );
+      return body.map((item) => City.fromJson(item as Map<String, dynamic>)).toList();
+    } on UnauthorizedException {
+      rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get Cities error: $e');
-      return [];
+      debugPrint('Get Cities error: $e');
+      _rethrowListError(e, 'Učitavanje gradova nije uspjelo');
     }
   }
 
@@ -538,14 +595,18 @@ class ApiService {
         },
       );
 
-      if (response.statusCode == 200) {
-        List<dynamic> body = jsonDecode(response.body);
-        return body.map((dynamic item) => Notification.fromJson(item)).toList();
-      }
-      return [];
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje obavijesti nije uspjelo.',
+      );
+      return body.map((dynamic item) => Notification.fromJson(item)).toList();
+    } on UnauthorizedException {
+      rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get Notifications error: $e');
-      return [];
+      debugPrint('Get Notifications error: $e');
+      _rethrowListError(e, 'Učitavanje obavijesti nije uspjelo');
     }
   }
 
@@ -612,14 +673,18 @@ class ApiService {
         },
       );
 
-      if (response.statusCode == 200) {
-        List<dynamic> body = jsonDecode(response.body);
-        return body.map((dynamic item) => User.fromJson(item)).toList();
-      }
-      return [];
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje korisnika nije uspjelo.',
+      );
+      return body.map((dynamic item) => User.fromJson(item)).toList();
+    } on UnauthorizedException {
+      rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get Users error: $e');
-      return [];
+      debugPrint('Get Users error: $e');
+      _rethrowListError(e, 'Učitavanje korisnika nije uspjelo');
     }
   }
 
@@ -877,14 +942,20 @@ class ApiService {
         },
       );
 
-      if (response.statusCode == 200) {
-        List<dynamic> body = jsonDecode(response.body);
-        return body.map((dynamic item) => Appointment.fromJson(item)).toList();
-      }
-      return [];
+      await _handleUnauthorizedResponse(response);
+
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje termina nije uspjelo.',
+      );
+      return body.map((dynamic item) => Appointment.fromJson(item)).toList();
+    } on UnauthorizedException {
+      rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get Appointments error: $e');
-      return [];
+      debugPrint('Get Appointments error: $e');
+      _rethrowListError(e, 'Učitavanje termina nije uspjelo');
     }
   }
 
@@ -901,14 +972,20 @@ class ApiService {
         },
       );
 
-      if (response.statusCode == 200) {
-        List<dynamic> body = jsonDecode(response.body);
-        return body.cast<String>();
-      }
-      return [];
+      await _handleUnauthorizedResponse(response);
+
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje slobodnih termina nije uspjelo.',
+      );
+      return body.cast<String>();
+    } on UnauthorizedException {
+      rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get Available Slots error: $e');
-      return [];
+      debugPrint('Get Available Slots error: $e');
+      _rethrowListError(e, 'Učitavanje slobodnih termina nije uspjelo');
     }
   }
 
@@ -1054,15 +1131,38 @@ class ApiService {
     } catch (_) {}
   }
 
+  Future<String> createPaymentSession(String token, int appointmentId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/Transaction/payment-session'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({'appointmentId': appointmentId}),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data['alreadyPaid'] == true) {
+        throw Exception('Ovaj termin je već plaćen.');
+      }
+      final id = data['paymentSessionId']?.toString();
+      if (id == null || id.isEmpty) {
+        throw Exception('paymentSessionId je prazan.');
+      }
+      return id;
+    }
+    throw Exception(_extractApiError(response.body, 'Nije moguće pokrenuti sesiju plaćanja.'));
+  }
+
   String buildEmbeddedPaymentFormUrl({
     required int appointmentId,
-    required String token,
+    required String paymentSessionId,
     double? amount,
     String? clientPlatform,
   }) {
     final query = <String, String>{
       'appointmentId': appointmentId.toString(),
-      'token': token,
+      'paymentSessionId': paymentSessionId,
     };
     if (amount != null) {
       query['amount'] = (amount * 100).round().toString();
@@ -1104,14 +1204,18 @@ class ApiService {
         Uri.parse('$baseUrl/Reviews/my-reviews'),
         headers: {'Authorization': 'Bearer $token'},
       );
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return data.map((json) => Review.fromJson(json)).toList();
-      }
-      return [];
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje vaših recenzija nije uspjelo.',
+      );
+      return body.map((json) => Review.fromJson(json)).toList();
+    } on UnauthorizedException {
+      rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get my reviews error: $e');
-      return [];
+      debugPrint('Get my reviews error: $e');
+      _rethrowListError(e, 'Učitavanje vaših recenzija nije uspjelo');
     }
   }
 
@@ -1119,15 +1223,21 @@ class ApiService {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/Reviews/barber/$barberId'),
+        headers: {'Content-Type': 'application/json'},
       );
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return data.map((json) => Review.fromJson(json)).toList();
-      }
-      return [];
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje recenzija frizera nije uspjelo.',
+        checkAuth: false,
+      );
+      return body.map((json) => Review.fromJson(json)).toList();
+    } on UnauthorizedException {
+      rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get barber reviews error: $e');
-      return [];
+      debugPrint('Get barber reviews error: $e');
+      _rethrowListError(e, 'Učitavanje recenzija frizera nije uspjelo');
     }
   }
 
@@ -1135,15 +1245,21 @@ class ApiService {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/Reviews/salon/$salonId'),
+        headers: {'Content-Type': 'application/json'},
       );
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return data.map((json) => Review.fromJson(json)).toList();
-      }
-      return [];
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje recenzija salona nije uspjelo.',
+        checkAuth: false,
+      );
+      return body.map((json) => Review.fromJson(json)).toList();
+    } on UnauthorizedException {
+      rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get salon reviews error: $e');
-      return [];
+      debugPrint('Get salon reviews error: $e');
+      _rethrowListError(e, 'Učitavanje recenzija salona nije uspjelo');
     }
   }
 
@@ -1218,14 +1334,18 @@ class ApiService {
         Uri.parse('$baseUrl/WorkingHours/my-schedule'),
         headers: {'Authorization': 'Bearer $token'},
       );
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return data.map((json) => WorkingHours.fromJson(json)).toList();
-      }
-      return [];
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje rasporeda nije uspjelo.',
+      );
+      return body.map((json) => WorkingHours.fromJson(json)).toList();
+    } on UnauthorizedException {
+      rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get schedule error: $e');
-      return [];
+      debugPrint('Get schedule error: $e');
+      _rethrowListError(e, 'Učitavanje rasporeda nije uspjelo');
     }
   }
 
@@ -1291,16 +1411,18 @@ class ApiService {
         headers: {'Authorization': 'Bearer $token'},
       );
       await _handleUnauthorizedResponse(response);
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return data.map((json) => Review.fromJson(json)).toList();
-      }
-      return [];
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje recenzija frizera nije uspjelo.',
+      );
+      return body.map((json) => Review.fromJson(json)).toList();
     } on UnauthorizedException {
       rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get barber reviews error: $e');
-      return [];
+      debugPrint('Get barber reviews error: $e');
+      _rethrowListError(e, 'Učitavanje recenzija frizera nije uspjelo');
     }
   }
 
@@ -1337,13 +1459,20 @@ class ApiService {
           'Authorization': 'Bearer $token',
         },
       );
-      if (response.statusCode == 200) {
-        return List<Map<String, dynamic>>.from(jsonDecode(response.body));
-      }
-      return [];
+      await _handleUnauthorizedResponse(response);
+
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje usluga frizera nije uspjelo.',
+      );
+      return body.cast<Map<String, dynamic>>();
+    } on UnauthorizedException {
+      rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get barber services error: $e');
-      return [];
+      debugPrint('Get barber services error: $e');
+      _rethrowListError(e, 'Učitavanje usluga frizera nije uspjelo');
     }
   }
 
@@ -1422,19 +1551,20 @@ class ApiService {
         },
       );
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        final List<dynamic> data = decoded is List
-            ? decoded
-            : (decoded is Map<String, dynamic> && decoded['items'] is List
-                ? decoded['items'] as List<dynamic>
-                : <dynamic>[]);
-        return data.cast<Map<String, dynamic>>();
-      }
-      return [];
+      await _handleUnauthorizedResponse(response);
+
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje preporuka nije uspjelo.',
+      );
+      return body.cast<Map<String, dynamic>>();
+    } on UnauthorizedException {
+      rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get Recommendations error: $e');
-      return [];
+      debugPrint('Get Recommendations error: $e');
+      _rethrowListError(e, 'Učitavanje preporuka nije uspjelo');
     }
   }
 
@@ -1451,22 +1581,18 @@ class ApiService {
       );
       await _handleUnauthorizedResponse(response);
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        final List<dynamic> data = decoded is List
-            ? decoded
-            : (decoded is Map<String, dynamic> && decoded['items'] is List
-                ? decoded['items'] as List<dynamic>
-                : <dynamic>[]);
-        return data.cast<int>();
-      }
-      print('Get Favorite Salons failed: ${response.statusCode} ${response.body}');
-      return [];
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje omiljenih salona nije uspjelo.',
+      );
+      return body.cast<int>();
     } on UnauthorizedException {
       rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get Favorite Salons error: $e');
-      return [];
+      debugPrint('Get Favorite Salons error: $e');
+      _rethrowListError(e, 'Učitavanje omiljenih salona nije uspjelo');
     }
   }
 
@@ -1515,14 +1641,20 @@ class ApiService {
         },
       );
 
-      if (response.statusCode == 200) {
-        List<dynamic> body = jsonDecode(response.body);
-        return body.map((dynamic item) => ServiceCategory.fromJson(item)).toList();
-      }
-      return [];
+      await _handleUnauthorizedResponse(response);
+
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje kategorija usluga nije uspjelo.',
+      );
+      return body.map((dynamic item) => ServiceCategory.fromJson(item)).toList();
+    } on UnauthorizedException {
+      rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get Service Categories error: $e');
-      return [];
+      debugPrint('Get Service Categories error: $e');
+      _rethrowListError(e, 'Učitavanje kategorija usluga nije uspjelo');
     }
   }
 
@@ -1602,16 +1734,18 @@ class ApiService {
       );
       await _handleUnauthorizedResponse(response);
 
-      if (response.statusCode == 200) {
-        List<dynamic> body = jsonDecode(response.body);
-        return body.map((dynamic item) => SalonAmenity.fromJson(item)).toList();
-      }
-      return [];
+      final body = await _parseJsonListResponse(
+        response,
+        'Učitavanje pogodnosti salona nije uspjelo.',
+      );
+      return body.map((dynamic item) => SalonAmenity.fromJson(item)).toList();
     } on UnauthorizedException {
       rethrow;
+    } on ForbiddenException {
+      rethrow;
     } catch (e) {
-      print('Get Salon Amenities error: $e');
-      return [];
+      debugPrint('Get Salon Amenities error: $e');
+      _rethrowListError(e, 'Učitavanje pogodnosti salona nije uspjelo');
     }
   }
 

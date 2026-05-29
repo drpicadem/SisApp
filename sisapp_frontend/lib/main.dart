@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:app_links/app_links.dart';
 import 'package:provider/provider.dart';
+import 'utils/api_datetime.dart';
 import 'providers/auth_provider.dart';
 import 'providers/service_provider.dart';
 import 'providers/barber_provider.dart';
@@ -40,6 +41,7 @@ import 'services/api_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  ApiDateTime.ensureInitialized();
   runApp(MyApp());
 }
 

@@ -44,6 +44,7 @@ class ReviewProvider extends ChangeNotifier {
     } catch (e) {
       print('Error fetching barber reviews: $e');
       _barberReviews = [];
+      rethrow;
     }
 
     _isLoading = false;
@@ -59,6 +60,7 @@ class ReviewProvider extends ChangeNotifier {
     } catch (e) {
       print('Error fetching salon reviews: $e');
       _salonReviews = [];
+      rethrow;
     }
 
     _isLoading = false;

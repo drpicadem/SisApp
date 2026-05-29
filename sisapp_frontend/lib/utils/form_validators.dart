@@ -111,8 +111,8 @@ class FormValidators {
     if (required != null) return required;
     final parsed = double.tryParse(value!.trim().replaceAll(',', '.'));
     if (parsed == null) return 'Unesite broj u formatu 10 ili 10.50';
-    if (parsed <= 0) return 'Cijena mora biti veća od 0 KM';
-    if (parsed > 1000) return 'Cijena mora biti manja ili jednaka 1000 KM';
+    if (parsed <= 0) return 'Cijena mora biti veća od 0 EUR';
+    if (parsed > 1000) return 'Cijena mora biti manja ili jednaka 1000 EUR';
     return null;
   }
 

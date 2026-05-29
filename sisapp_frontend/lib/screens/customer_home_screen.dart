@@ -589,7 +589,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        '${(rec['price'] as num?)?.toStringAsFixed(2) ?? '0.00'} KM',
+                        '${(rec['price'] as num?)?.toStringAsFixed(2) ?? '0.00'} EUR',
                         style: TextStyle(fontSize: 12, color: Colors.green[700], fontWeight: FontWeight.w600),
                       ),
                     ),

@@ -81,11 +81,21 @@ namespace ŠišAppApi.Services.Services
             var barber = await GetBarberByUserIdAsync(userId);
 
             var workingHours = await _context.WorkingHours.FindAsync(id);
-            if (workingHours == null)
+            if (workingHours == null || workingHours.IsDeleted)
                 throw new UserException("Radno vrijeme nije pronađeno.");
 
             if (workingHours.BarberId != barber.Id)
                 throw new UserException("Možete ažurirati samo svoje radno vrijeme.");
+
+            var duplicateDay = await _context.WorkingHours
+                .AnyAsync(wh =>
+                    wh.BarberId == barber.Id &&
+                    wh.DayOfWeek == dto.DayOfWeek &&
+                    wh.Id != id &&
+                    !wh.IsDeleted);
+
+            if (duplicateDay)
+                throw new UserException("Već imate definirano radno vrijeme za taj dan. Uredite postojeće.");
 
             workingHours.DayOfWeek = dto.DayOfWeek;
             workingHours.StartTime = dto.StartTime;

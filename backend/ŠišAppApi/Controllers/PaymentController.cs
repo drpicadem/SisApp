@@ -1,7 +1,8 @@
-using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
-using ŠišAppApi.Services;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using ŠišAppApi.Services;
 
 namespace ŠišAppApi.Controllers;
 
@@ -24,7 +25,13 @@ public class PaymentController : ControllerBase
     [HttpPost("cancel-pending")]
     public async Task<IActionResult> CancelPending([FromBody] CancelPendingStripeRequest request)
     {
-        return await _paymentService.CancelPending(request);
+        if (!request.AppointmentId.HasValue)
+            return BadRequest("AppointmentId je obavezan.");
+
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            return Unauthorized();
+
+        return await _paymentService.CancelPending(request.AppointmentId.Value, userId);
     }
 
     [AllowAnonymous]

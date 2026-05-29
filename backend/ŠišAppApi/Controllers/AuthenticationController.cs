@@ -10,7 +10,7 @@ namespace ŠišAppApi.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-[Authorize]
+    [Authorize]
     public class AuthenticationController : ControllerBase
     {
         private readonly IAuthenticationService _authService;
@@ -42,6 +42,7 @@ namespace ŠišAppApi.Controllers
         }
 
         [HttpPost("refresh-token")]
+        [AllowAnonymous]
         public async Task<ActionResult<TokenResponse>> RefreshToken([FromBody] string refreshToken)
         {
             var response = await _authService.RefreshToken(refreshToken);

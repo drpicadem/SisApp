@@ -213,6 +213,34 @@ namespace ŠišAppApi.Services.Services
             return _mapper.Map<ServiceDto>(entity);
         }
 
+        public async Task<ServiceDto> InsertAsBarber(ServiceInsertRequest request, int userId)
+        {
+            var isOwner = await _context.Salons
+                .AnyAsync(s => s.Id == request.SalonId && !s.IsDeleted && s.Barbers.Any(b => b.UserId == userId));
+
+            if (!isOwner)
+            {
+                _logger.LogWarning("Unauthorized insert attempt by User {UserId} for Salon {SalonId}", userId, request.SalonId);
+                throw new UserException("Možete dodavati usluge samo u svoj salon.");
+            }
+
+            return await Insert(request);
+        }
+
+        public async Task<ServiceDto> UpdateAsBarber(int serviceId, ServiceUpdateRequest request, int userId)
+        {
+            var isOwner = await _context.Services
+                .AnyAsync(s => s.Id == serviceId && !s.IsDeleted && s.Salon.Barbers.Any(b => b.UserId == userId));
+
+            if (!isOwner)
+            {
+                _logger.LogWarning("Unauthorized update attempt by User {UserId} for Service {ServiceId}", userId, serviceId);
+                throw new UserException("Možete mijenjati samo usluge iz svog salona.");
+            }
+
+            return await Update(serviceId, request);
+        }
+
         public async Task<ServiceDto> DeleteAsBarber(int serviceId, int userId)
         {
             var isOwner = await _context.Services

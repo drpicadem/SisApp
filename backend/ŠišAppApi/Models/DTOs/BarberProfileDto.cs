@@ -6,6 +6,7 @@ namespace ŠišAppApi.Models.DTOs
         public int UserId { get; set; }
         public int SalonId { get; set; }
         public double Rating { get; set; }
+        public int ReviewCount { get; set; }
         public string? Bio { get; set; }
         public string? ImageIds { get; set; }
         public string FirstName { get; set; } = string.Empty;

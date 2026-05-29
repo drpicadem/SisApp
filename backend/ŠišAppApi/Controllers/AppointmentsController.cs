@@ -31,6 +31,24 @@ namespace ŠišAppApi.Controllers
             return await base.Get(search);
         }
 
+        [HttpGet("{id}")]
+        public override async Task<ActionResult<AppointmentDto>> GetById(int id)
+        {
+            try
+            {
+                var result = await _appointmentService.GetByIdForUser(id, GetUserId(), GetUserRole());
+                return Ok(result);
+            }
+            catch (NotFoundException)
+            {
+                return NotFound();
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
         [HttpPost]
         public override async Task<ActionResult<AppointmentDto>> Insert([FromBody] AppointmentInsertRequest request)
         {

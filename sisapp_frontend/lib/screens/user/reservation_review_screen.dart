@@ -207,7 +207,7 @@ class _ReservationReviewScreenState extends State<ReservationReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormatter = NumberFormat.currency(locale: 'bs', symbol: 'KM');
+    final currencyFormatter = NumberFormat.currency(locale: 'de', symbol: 'EUR', decimalDigits: 2);
     final alreadyPaid = widget.appointment.isPaid || widget.appointment.paymentStatus == 'Paid';
 
     return Scaffold(

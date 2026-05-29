@@ -1,12 +1,10 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
 using Stripe;
 using ŠišAppApi.Constants;
+using ŠišAppApi.Data;
+using ŠišAppApi.Models;
 using ŠišAppApi.Services.Interfaces;
 
 namespace ŠišAppApi.Controllers;
@@ -20,6 +18,7 @@ public class TransactionController : ControllerBase
     private readonly ICurrentUserService _currentUser;
     private readonly IWebHostEnvironment _env;
     private readonly IStripeTransactionService _stripeService;
+    private readonly ApplicationDbContext _context;
     private readonly string _stripeSecret;
     private readonly string _stripePublishableKey;
     private readonly bool _isSecretFromEnv;
@@ -30,13 +29,15 @@ public class TransactionController : ControllerBase
         ILogger<TransactionController> logger,
         ICurrentUserService currentUser,
         IWebHostEnvironment env,
-        IStripeTransactionService stripeService)
+        IStripeTransactionService stripeService,
+        ApplicationDbContext context)
     {
         _configuration = configuration;
         _logger = logger;
         _currentUser = currentUser;
         _env = env;
         _stripeService = stripeService;
+        _context = context;
 
         var envSecret = Environment.GetEnvironmentVariable("stripe");
         var cfgSecret = _configuration["Stripe:SecretKey"];
@@ -49,24 +50,53 @@ public class TransactionController : ControllerBase
         _stripePublishableKey = _isPublishableFromEnv ? envPublishableKey! : (cfgPublishableKey ?? string.Empty);
     }
 
+    [Authorize]
+    [HttpPost("payment-session")]
+    public async Task<IActionResult> CreatePaymentSession([FromBody] CreatePaymentSessionRequest request)
+    {
+        if (!_currentUser.UserId.HasValue)
+            return Unauthorized(new { error = "Nevažeći korisnik." });
+
+        var appointmentData = await _stripeService.GetAppointmentForPaymentAsync(
+            request.AppointmentId, _currentUser.UserId.Value);
+
+        if (appointmentData == null)
+            return NotFound(new { error = "Termin nije pronađen." });
+
+        if (appointmentData.Id == -1)
+            return StatusCode(403, new { error = "Nemate pravo pristupa ovom terminu." });
+
+        if (appointmentData.AlreadyPaid)
+            return Ok(new { alreadyPaid = true });
+
+        var session = new PaymentSession
+        {
+            UserId = _currentUser.UserId.Value,
+            AppointmentId = request.AppointmentId,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(10)
+        };
+
+        _context.PaymentSessions.Add(session);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { paymentSessionId = session.Id.ToString() });
+    }
+
     [HttpGet("payment-form")]
     public async Task<IActionResult> PaymentForm(
         [FromQuery] int appointmentId,
-        [FromQuery] string? token = null,
-        [FromQuery(Name = "authToken")] string? authToken = null,
+        [FromQuery] string? paymentSessionId = null,
         [FromQuery] string? clientPlatform = null)
     {
-        token = ResolveIncomingToken(token, authToken);
-        if (string.IsNullOrWhiteSpace(token))
-            return Content(BuildErrorHtml("Nedostaje token za autorizaciju."), "text/html; charset=utf-8");
+        if (string.IsNullOrWhiteSpace(paymentSessionId) || !Guid.TryParse(paymentSessionId, out var sessionGuid))
+            return Content(BuildErrorHtml("Nedostaje ili je nevažeći paymentSessionId."), "text/html; charset=utf-8");
 
-        var principal = ValidateTokenFromQuery(token, out var tokenError);
-        if (principal == null)
-            return Content(BuildErrorHtml($"Nevažeći token: {tokenError}"), "text/html; charset=utf-8");
+        var session = await _context.PaymentSessions.FindAsync(sessionGuid);
 
-        var userIdClaim = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (!int.TryParse(userIdClaim, out var userId))
-            return Content(BuildErrorHtml("Token ne sadrži validan korisnički ID."), "text/html; charset=utf-8");
+        if (session == null || session.IsUsed || session.ExpiresAt < DateTime.UtcNow || session.AppointmentId != appointmentId)
+            return Content(BuildErrorHtml("Sesija plaćanja je istekla ili nevažeća. Pokušajte ponovo."), "text/html; charset=utf-8");
+
+        var userId = session.UserId;
 
         var appointmentData = await _stripeService.GetAppointmentForPaymentAsync(appointmentId, userId);
 
@@ -94,7 +124,7 @@ public class TransactionController : ControllerBase
                 publishableKey,
                 intentData.ClientSecret,
                 appointmentId,
-                token,
+                paymentSessionId,
                 intentData.AmountInCents,
                 string.Equals(clientPlatform, "mobile", StringComparison.OrdinalIgnoreCase)), "text/html; charset=utf-8");
         }
@@ -105,17 +135,26 @@ public class TransactionController : ControllerBase
         }
     }
 
-    [Authorize]
     [HttpPost("complete-purchase")]
     public async Task<IActionResult> CompletePurchase([FromBody] CompletePurchaseRequest request)
     {
-        if (!_currentUser.UserId.HasValue)
-            return Unauthorized(new { error = "Nevažeći korisnik." });
+        if (string.IsNullOrWhiteSpace(request.PaymentSessionId) || !Guid.TryParse(request.PaymentSessionId, out var sessionGuid))
+            return Unauthorized(new { error = "Nedostaje paymentSessionId." });
+
+        var session = await _context.PaymentSessions.FindAsync(sessionGuid);
+
+        if (session == null || session.IsUsed || session.ExpiresAt < DateTime.UtcNow || session.AppointmentId != request.AppointmentId)
+            return Unauthorized(new { error = "Sesija plaćanja je istekla ili nevažeća." });
+
+        session.IsUsed = true;
+        await _context.SaveChangesAsync();
+
+        var userId = session.UserId;
 
         try
         {
             var result = await _stripeService.CompletePurchaseAsync(
-                request.AppointmentId, _currentUser.UserId.Value, request.PaymentIntentId);
+                request.AppointmentId, userId, request.PaymentIntentId);
 
             if (result.AlreadyCompleted)
                 return Ok(new { status = AppointmentPaymentStatuses.Paid, alreadyCompleted = true });
@@ -170,36 +209,6 @@ public class TransactionController : ControllerBase
         });
     }
 
-    private ClaimsPrincipal? ValidateTokenFromQuery(string token, out string? error)
-    {
-        error = null;
-        try
-        {
-            var handler = new JwtSecurityTokenHandler();
-            var jwtKey = _configuration["Jwt:Key"];
-            if (string.IsNullOrWhiteSpace(jwtKey)) { error = "JWT key nije konfigurisan."; return null; }
-
-            var principal = handler.ValidateToken(token, new TokenValidationParameters
-            {
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-                ValidateIssuer = true,
-                ValidIssuer = _configuration["Jwt:Issuer"],
-                ValidateAudience = true,
-                ValidAudience = _configuration["Jwt:Audience"],
-                ValidateLifetime = true,
-                ClockSkew = TimeSpan.FromMinutes(1)
-            }, out _);
-            return principal;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Token validation failed");
-            error = "Token validation failed.";
-            return null;
-        }
-    }
-
     private static string MaskPrefix(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return string.Empty;
@@ -208,19 +217,6 @@ public class TransactionController : ControllerBase
     }
 
     private static string JsLiteral(string value) => JsonSerializer.Serialize(value);
-
-    private string? ResolveIncomingToken(string? queryToken, string? authToken)
-    {
-        var token = !string.IsNullOrWhiteSpace(queryToken) ? queryToken : authToken;
-        if (!string.IsNullOrWhiteSpace(token)) return token;
-
-        var authorization = Request.Headers.Authorization.ToString();
-        if (!string.IsNullOrWhiteSpace(authorization) &&
-            authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            return authorization["Bearer ".Length..].Trim();
-
-        return null;
-    }
 
     private static string BuildErrorHtml(string message)
     {
@@ -266,7 +262,7 @@ public class TransactionController : ControllerBase
 """;
     }
 
-    private static string BuildPaymentHtml(string publishableKey, string clientSecret, int appointmentId, string token, long amountInCents, bool mobileClient)
+    private static string BuildPaymentHtml(string publishableKey, string clientSecret, int appointmentId, string paymentSessionId, long amountInCents, bool mobileClient)
     {
         var messagePayloadSuccess = JsonSerializer.Serialize(new { type = "sisapp-embedded-payment", status = "success", appointmentId });
         var messagePayloadCancel = JsonSerializer.Serialize(new { type = "sisapp-embedded-payment", status = "cancel", appointmentId });
@@ -310,7 +306,7 @@ public class TransactionController : ControllerBase
   <script>
     const pk = {{{JsLiteral(publishableKey)}}};
     const clientSecret = {{{JsLiteral(clientSecret)}}};
-    const token = {{{JsLiteral(token)}}};
+    const paymentSessionId = {{{JsLiteral(paymentSessionId)}}};
     const appointmentId = {{{appointmentId}}};
     const mobileClient = {{{(mobileClient ? "true" : "false")}}};
     const successPayload = {{{JsLiteral(messagePayloadSuccess)}}};
@@ -346,8 +342,12 @@ public class TransactionController : ControllerBase
 
       const completeRes = await fetch('/api/Transaction/complete-purchase', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ appointmentId: appointmentId, paymentIntentId: result.paymentIntent.id })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appointmentId: appointmentId,
+          paymentIntentId: result.paymentIntent.id,
+          paymentSessionId: paymentSessionId
+        })
       });
 
       let completeBody = {};
@@ -371,8 +371,14 @@ public class TransactionController : ControllerBase
     }
 }
 
+public class CreatePaymentSessionRequest
+{
+    public int AppointmentId { get; set; }
+}
+
 public class CompletePurchaseRequest
 {
     public int AppointmentId { get; set; }
     public string? PaymentIntentId { get; set; }
+    public string? PaymentSessionId { get; set; }
 }

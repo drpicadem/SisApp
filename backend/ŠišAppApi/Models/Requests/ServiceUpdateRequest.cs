@@ -17,7 +17,7 @@ namespace ŠišAppApi.Models.Requests
 
         [Required]
         [Column(TypeName = "decimal(10,2)")]
-        [Range(typeof(decimal), "0.01", "1000", ErrorMessage = "Cijena mora biti između 0.01 i 1000 KM.")]
+        [Range(typeof(decimal), "0.01", "1000", ErrorMessage = "Cijena mora biti između 0.01 i 1000 EUR.")]
         public decimal Price { get; set; }
 
         public int? CategoryId { get; set; }

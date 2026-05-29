@@ -33,7 +33,7 @@ namespace ŠišAppApi.Services.Services
             _logger = logger;
         }
 
-        public async Task<string> CreateOrderAsync(int appointmentId)
+        public async Task<string> CreateOrderAsync(int appointmentId, int userId)
         {
             var appointment = await _context.Appointments
                 .Include(a => a.Service)
@@ -42,12 +42,17 @@ namespace ŠišAppApi.Services.Services
             if (appointment == null)
                 throw new NotFoundException("Appointment not found");
 
+            if (appointment.UserId != userId)
+                throw new UnauthorizedAccessException("Nemate pristup ovom terminu.");
+
             if (appointment.PaymentStatus == AppointmentPaymentStatuses.Paid ||
                 await _context.Payments.AnyAsync(p => p.AppointmentId == appointmentId && p.Status == PaymentStatuses.Completed))
                 throw new UserException("Ovaj termin je već plaćen.");
 
+            await ExpireStalePendingPaymentsAsync(appointmentId);
+
             if (await _context.Payments.AnyAsync(p => p.AppointmentId == appointmentId && p.Status == PaymentStatuses.Pending))
-                throw new UserException("Plaćanje je već pokrenuto za ovaj termin.");
+                throw new UserException("Plaćanje je već pokrenuto za ovaj termin. Molimo pričekajte ili otkažite aktivnu sesiju plaćanja.");
 
             var expectedAmount = decimal.Round(appointment.Service?.Price ?? 0m, 2, MidpointRounding.AwayFromZero);
             if (expectedAmount <= 0m)
@@ -106,7 +111,7 @@ namespace ŠišAppApi.Services.Services
             return orderId;
         }
 
-        public async Task<PayPalCaptureResult> CaptureOrderAsync(string orderId, int appointmentId)
+        public async Task<PayPalCaptureResult> CaptureOrderAsync(string orderId, int appointmentId, int userId)
         {
             var appointment = await _context.Appointments
                 .Include(a => a.Service)
@@ -114,6 +119,9 @@ namespace ŠišAppApi.Services.Services
 
             if (appointment == null)
                 return new PayPalCaptureResult { AppointmentNotFound = true };
+
+            if (appointment.UserId != userId)
+                throw new UnauthorizedAccessException("Nemate pristup ovom terminu.");
 
             if (appointment.PaymentStatus == AppointmentPaymentStatuses.Paid)
                 return new PayPalCaptureResult { AlreadyPaid = true };
@@ -178,8 +186,15 @@ namespace ŠišAppApi.Services.Services
             };
         }
 
-        public async Task<PayPalCancelResult> CancelPendingAsync(int appointmentId)
+        public async Task<PayPalCancelResult> CancelPendingAsync(int appointmentId, int userId)
         {
+            var appointment = await _context.Appointments.FindAsync(appointmentId);
+            if (appointment == null)
+                throw new NotFoundException("Appointment not found");
+
+            if (appointment.UserId != userId)
+                throw new UnauthorizedAccessException("Nemate pristup ovom terminu.");
+
             var pending = await _context.Payments
                 .FirstOrDefaultAsync(p =>
                     p.AppointmentId == appointmentId &&
@@ -194,6 +209,29 @@ namespace ŠišAppApi.Services.Services
             await _context.SaveChangesAsync();
 
             return new PayPalCancelResult { HadPending = true };
+        }
+
+        private async Task ExpireStalePendingPaymentsAsync(int appointmentId)
+        {
+            var pendingPayments = await _context.Payments
+                .Where(p => p.AppointmentId == appointmentId && p.Status == PaymentStatuses.Pending)
+                .ToListAsync();
+
+            var staleCutoff = DateTime.UtcNow.AddMinutes(-30);
+            var stalePayments = pendingPayments.Where(p => p.CreatedAt < staleCutoff).ToList();
+
+            if (stalePayments.Count == 0)
+                return;
+
+            foreach (var stale in stalePayments)
+            {
+                stale.Status = PaymentStatuses.Expired;
+                stale.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Expired {Count} stale PayPal pending payment(s) for Appointment {AppId}.",
+                stalePayments.Count, appointmentId);
         }
 
         private async Task<(HttpClient client, string baseUrl, string accessToken)> BuildAuthenticatedClientAsync()

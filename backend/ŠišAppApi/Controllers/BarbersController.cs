@@ -1,9 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ŠišAppApi.Constants;
 using ŠišAppApi.Filters;
 using ŠišAppApi.Models.DTOs;
 using ŠišAppApi.Services.Interfaces;
-
-using Microsoft.AspNetCore.Authorization;
 
 namespace ŠišAppApi.Controllers;
 
@@ -49,6 +49,7 @@ public class BarbersController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = AppRoles.Admin)]
     public async Task<ActionResult<BarberProfileDto>> PostBarber(CreateBarberRequest dto)
     {
         var barber = await _barberService.CreateBarberAsync(dto);
@@ -75,27 +76,63 @@ public class BarbersController : ControllerBase
     }
 
     [HttpPost("{barberId}/services")]
+    [Authorize(Roles = AppRoles.AdminOrBarber)]
     public async Task<IActionResult> AssignBarberServices(int barberId, [FromBody] List<int> serviceIds)
     {
+        var denied = await AuthorizeBarberTargetAsync(barberId);
+        if (denied != null)
+            return denied;
+
         await _barberService.AssignBarberServicesAsync(barberId, serviceIds);
         return Ok();
     }
 
     [HttpDelete("{barberId}/services/{serviceId}")]
+    [Authorize(Roles = AppRoles.AdminOrBarber)]
     public async Task<IActionResult> RemoveBarberService(int barberId, int serviceId)
     {
+        var denied = await AuthorizeBarberTargetAsync(barberId);
+        if (denied != null)
+            return denied;
+
         await _barberService.RemoveBarberServiceAsync(barberId, serviceId);
         return NoContent();
     }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<BarberProfileDto>> UpdateBarber(int id, UpdateBarberRequest dto)
+    [Authorize(Roles = AppRoles.AdminOrBarber)]
+    public async Task<IActionResult> UpdateBarber(int id, UpdateBarberRequest dto)
     {
-        var adminUserId = _currentUser.UserId;
+        var denied = await AuthorizeBarberTargetAsync(id);
+        if (denied != null)
+            return denied;
+
+        var adminUserIdForLog = string.Equals(_currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase)
+            ? _currentUser.UserId
+            : null;
+
         var result = await _barberService.UpdateBarberAsync(
-            id, dto, adminUserId,
+            id, dto, adminUserIdForLog,
             HttpContext.Connection.RemoteIpAddress?.ToString(),
             Request.Headers.UserAgent.ToString());
         return Ok(result);
+    }
+
+    private async Task<IActionResult?> AuthorizeBarberTargetAsync(int targetBarberId)
+    {
+        if (string.Equals(_currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        if (!string.Equals(_currentUser.Role, AppRoles.Barber, StringComparison.OrdinalIgnoreCase))
+            return Forbid();
+
+        if (!_currentUser.UserId.HasValue)
+            return Unauthorized();
+
+        var myBarberId = await _barberService.GetBarberIdByUserIdAsync(_currentUser.UserId.Value);
+        if (!myBarberId.HasValue || myBarberId.Value != targetBarberId)
+            return Forbid();
+
+        return null;
     }
 }

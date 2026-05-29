@@ -78,9 +78,10 @@ class PaymentProvider extends ChangeNotifier {
   ) async {
     try {
       final token = _authProvider!.tokenResponse!.token;
+      final paymentSessionId = await _apiService.createPaymentSession(token, appointment.id!);
       final formUrl = _apiService.buildEmbeddedPaymentFormUrl(
         appointmentId: appointment.id!,
-        token: token,
+        paymentSessionId: paymentSessionId,
         amount: amount,
         clientPlatform: _isMobilePlatform ? 'mobile' : 'web',
       );

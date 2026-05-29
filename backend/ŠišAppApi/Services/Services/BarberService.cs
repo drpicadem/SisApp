@@ -29,6 +29,15 @@ namespace ŠišAppApi.Services.Services
             return barber == null ? null : MapToDto(barber);
         }
 
+        public async Task<int?> GetBarberIdByUserIdAsync(int userId)
+        {
+            return await _context.Barbers
+                .AsNoTracking()
+                .Where(b => b.UserId == userId && !b.IsDeleted)
+                .Select(b => (int?)b.Id)
+                .FirstOrDefaultAsync();
+        }
+
         public async Task<IEnumerable<BarberProfileDto>> GetBarbersBySalonAsync(int salonId, int page, int pageSize, int? serviceId)
         {
             var (p, ps) = Normalize(page, pageSize);
@@ -81,8 +90,7 @@ namespace ŠišAppApi.Services.Services
                     UserId = user.Id,
                     SalonId = dto.SalonId,
                     Bio = dto.Bio,
-                    CreatedAt = DateTime.UtcNow,
-                    Rating = 5.0
+                    CreatedAt = DateTime.UtcNow
                 };
 
                 _context.Barbers.Add(barber);
@@ -269,6 +277,7 @@ namespace ŠišAppApi.Services.Services
                 UserId = barber.UserId,
                 SalonId = barber.SalonId,
                 Rating = barber.Rating,
+                ReviewCount = barber.ReviewCount,
                 Bio = barber.Bio,
                 ImageIds = barber.ImageIds,
                 FirstName = u?.FirstName ?? string.Empty,

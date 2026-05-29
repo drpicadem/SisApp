@@ -31,6 +31,12 @@ public class ServicesController : BaseCRUDController<ServiceDto, ServiceSearchOb
     [Authorize(Roles = AppRoles.AdminOrBarber)]
     public override async Task<ActionResult<ServiceDto>> Insert([FromBody] ServiceInsertRequest request)
     {
+        if (GetUserRole() == AppRoles.Barber)
+        {
+            var result = await _serviceService.InsertAsBarber(request, GetUserId());
+            return Ok(result);
+        }
+
         return await base.Insert(request);
     }
 
@@ -38,6 +44,12 @@ public class ServicesController : BaseCRUDController<ServiceDto, ServiceSearchOb
     [Authorize(Roles = AppRoles.AdminOrBarber)]
     public override async Task<ActionResult<ServiceDto>> Update(int id, [FromBody] ServiceUpdateRequest request)
     {
+        if (GetUserRole() == AppRoles.Barber)
+        {
+            var result = await _serviceService.UpdateAsBarber(id, request, GetUserId());
+            return Ok(result);
+        }
+
         return await base.Update(id, request);
     }
 

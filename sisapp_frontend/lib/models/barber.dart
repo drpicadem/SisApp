@@ -8,6 +8,7 @@ class Barber {
   final String username;
   final String bio;
   final double rating;
+  final int reviewCount;
   final String? imageIds;
 
   Barber({
@@ -20,8 +21,11 @@ class Barber {
     required this.username,
     required this.bio,
     required this.rating,
+    this.reviewCount = 0,
     this.imageIds,
   });
+
+  bool get hasReviews => reviewCount > 0;
 
   factory Barber.fromJson(Map<String, dynamic> json) {
     return Barber(
@@ -34,6 +38,7 @@ class Barber {
       username: json['username'] ?? json['user']?['username'] ?? '',
       bio: json['bio'] ?? '',
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
+      reviewCount: (json['reviewCount'] as num?)?.toInt() ?? 0,
       imageIds: json['imageIds'],
     );
   }
@@ -48,6 +53,7 @@ class Barber {
     String? username,
     String? bio,
     double? rating,
+    int? reviewCount,
     String? imageIds,
   }) {
     return Barber(
@@ -60,6 +66,7 @@ class Barber {
       username: username ?? this.username,
       bio: bio ?? this.bio,
       rating: rating ?? this.rating,
+      reviewCount: reviewCount ?? this.reviewCount,
       imageIds: imageIds ?? this.imageIds,
     );
   }

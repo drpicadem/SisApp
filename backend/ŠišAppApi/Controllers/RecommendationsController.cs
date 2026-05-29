@@ -27,7 +27,7 @@ public class RecommendationsController : ControllerBase
         if (!_currentUser.UserId.HasValue)
             return Unauthorized();
 
-        var recommendations = await _recommendationService.GetRecommendations(_currentUser.UserId.Value);
-        return Ok(recommendations.Take(top));
+        var recommendations = await _recommendationService.GetRecommendations(_currentUser.UserId.Value, top);
+        return Ok(recommendations);
     }
 }

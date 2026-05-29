@@ -23,5 +23,7 @@ namespace ŠišAppApi.Models.DTOs
         public string? CustomerNotes { get; set; }
         public string? BarberNotes { get; set; }
         public string? CancellationReason { get; set; }
+        public int? CancelledByUserId { get; set; }
+        public int? ConfirmedByUserId { get; set; }
     }
 }

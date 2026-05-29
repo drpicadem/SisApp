@@ -30,6 +30,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Customer> Customers { get; set; }
     public DbSet<FavoriteSalon> FavoriteSalons { get; set; }
     public DbSet<City> Cities { get; set; }
+    public DbSet<PaymentSession> PaymentSessions { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -106,6 +107,24 @@ public class ApplicationDbContext : DbContext
             .HasOne(a => a.Review)
             .WithOne(r => r.Appointment)
             .HasForeignKey<Review>(r => r.AppointmentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Appointment>()
+            .HasOne(a => a.CancelledByUser)
+            .WithMany()
+            .HasForeignKey(a => a.CancelledByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Appointment>()
+            .HasOne(a => a.ConfirmedByUser)
+            .WithMany()
+            .HasForeignKey(a => a.ConfirmedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<PaymentSession>()
+            .HasOne(ps => ps.User)
+            .WithMany()
+            .HasForeignKey(ps => ps.UserId)
             .OnDelete(DeleteBehavior.Restrict);
 
 

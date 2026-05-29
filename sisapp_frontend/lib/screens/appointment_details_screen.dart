@@ -83,7 +83,7 @@ class AppointmentDetailsScreen extends StatelessWidget {
     final dateTime = appointment.appointmentDateTime;
     final dateLabel = DateFormat('dd.MM.yyyy').format(dateTime);
     final timeLabel = DateFormat('HH:mm').format(dateTime);
-    final priceLabel = NumberFormat.currency(locale: 'bs', symbol: 'KM')
+    final priceLabel = NumberFormat.currency(locale: 'de', symbol: 'EUR', decimalDigits: 2)
         .format(appointment.service?.price ?? 0);
     final paymentStatusLabel =
         appointment.paymentStatus == 'Paid' ? 'Plaćeno' : 'Neplaćeno';

@@ -55,8 +55,43 @@ namespace ŠišAppApi.Services.Services
 
         public async Task<StripePaymentIntentData> CreatePaymentIntentAsync(int appointmentId, long amountInCents)
         {
-            var intentService = new PaymentIntentService();
-            var paymentIntent = await intentService.CreateAsync(new PaymentIntentCreateOptions
+            var appointment = await _context.Appointments.FindAsync(appointmentId);
+
+            if (!string.IsNullOrWhiteSpace(appointment?.PaymentIntentId))
+            {
+                try
+                {
+                    var intentService = new PaymentIntentService();
+                    var existing = await intentService.GetAsync(appointment.PaymentIntentId);
+
+                    if (existing.Status is "requires_payment_method" or "requires_confirmation" or "requires_action")
+                    {
+                        return new StripePaymentIntentData
+                        {
+                            ClientSecret = existing.ClientSecret,
+                            PaymentIntentId = existing.Id,
+                            AmountInCents = existing.Amount
+                        };
+                    }
+
+                    if (existing.Status == "succeeded")
+                    {
+                        _logger.LogWarning(
+                            "Existing PaymentIntent {Id} already succeeded for Appointment {AppId}.",
+                            existing.Id, appointmentId);
+                        throw new UserException("Ovaj termin je već plaćen.");
+                    }
+                }
+                catch (StripeException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    _logger.LogWarning(
+                        "PaymentIntent {Id} not found on Stripe, creating new one.",
+                        appointment.PaymentIntentId);
+                }
+            }
+
+            var newIntentService = new PaymentIntentService();
+            var paymentIntent = await newIntentService.CreateAsync(new PaymentIntentCreateOptions
             {
                 Amount = amountInCents,
                 Currency = "eur",
@@ -67,7 +102,6 @@ namespace ŠišAppApi.Services.Services
                 }
             });
 
-            var appointment = await _context.Appointments.FindAsync(appointmentId);
             if (appointment != null)
             {
                 appointment.PaymentIntentId = paymentIntent.Id;

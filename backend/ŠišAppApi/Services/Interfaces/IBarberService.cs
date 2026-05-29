@@ -5,6 +5,7 @@ namespace ŠišAppApi.Services.Interfaces
     public interface IBarberService
     {
         Task<BarberProfileDto?> GetMyProfileAsync(int userId);
+        Task<int?> GetBarberIdByUserIdAsync(int userId);
         Task<IEnumerable<BarberProfileDto>> GetBarbersBySalonAsync(int salonId, int page, int pageSize, int? serviceId);
         Task<BarberProfileDto> CreateBarberAsync(CreateBarberRequest dto);
         Task UpdateBarberImageAsync(int barberId, string imageId);

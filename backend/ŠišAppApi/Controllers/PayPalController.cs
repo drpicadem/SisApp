@@ -1,10 +1,10 @@
-using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using ŠišAppApi.Services.Interfaces;
 
 namespace ŠišAppApi.Controllers;
-
-using Microsoft.AspNetCore.Authorization;
 
 [Route("api/[controller]")]
 [ApiController]
@@ -44,7 +44,10 @@ public class PayPalController : ControllerBase
             if (!request.AppointmentId.HasValue)
                 return BadRequest("AppointmentId je obavezan.");
 
-            var orderId = await _payPalOrderService.CreateOrderAsync(request.AppointmentId.Value);
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return Unauthorized();
+
+            var orderId = await _payPalOrderService.CreateOrderAsync(request.AppointmentId.Value, userId);
             return Ok(new { orderId });
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("Failed to authenticate with PayPal", StringComparison.OrdinalIgnoreCase))
@@ -67,7 +70,10 @@ public class PayPalController : ControllerBase
             if (!request.AppointmentId.HasValue)
                 return BadRequest("AppointmentId je obavezan.");
 
-            var result = await _payPalOrderService.CaptureOrderAsync(request.OrderId, request.AppointmentId.Value);
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return Unauthorized();
+
+            var result = await _payPalOrderService.CaptureOrderAsync(request.OrderId, request.AppointmentId.Value, userId);
 
             if (result.AppointmentNotFound)
                 return NotFound(new { error = "Appointment not found" });
@@ -95,7 +101,10 @@ public class PayPalController : ControllerBase
         if (!request.AppointmentId.HasValue)
             return BadRequest("AppointmentId je obavezan.");
 
-        var result = await _payPalOrderService.CancelPendingAsync(request.AppointmentId.Value);
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            return Unauthorized();
+
+        var result = await _payPalOrderService.CancelPendingAsync(request.AppointmentId.Value, userId);
         return Ok(new { status = result.HadPending ? "Cancelled" : "NoPending" });
     }
 }

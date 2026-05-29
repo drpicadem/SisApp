@@ -12,6 +12,7 @@ import '../models/barber.dart';
 import '../models/service.dart';
 import '../models/appointment.dart';
 import 'user/reservation_review_screen.dart';
+import '../utils/api_datetime.dart';
 
 class BookingScreen extends StatefulWidget {
   @override
@@ -22,7 +23,7 @@ class _BookingScreenState extends State<BookingScreen> {
   Salon? _selectedSalon;
   Barber? _selectedBarber;
   Service? _selectedService;
-  DateTime _selectedDate = DateTime.now();
+  DateTime _selectedDate = ApiDateTime.salonToday();
   String? _selectedTimeSlot;
 
   bool _isInit = true;
@@ -116,7 +117,7 @@ class _BookingScreenState extends State<BookingScreen> {
           value: _selectedService,
 
           items: serviceProvider.services.map((service) {
-            return DropdownMenuItem(value: service, child: Text('${service.name} (${service.price} KM)'));
+            return DropdownMenuItem(value: service, child: Text('${service.name} (${service.price.toStringAsFixed(2)} EUR)'));
           }).toList(),
           onChanged: (value) {
             setState(() {
@@ -175,8 +176,8 @@ class _BookingScreenState extends State<BookingScreen> {
             final picked = await showDatePicker(
               context: context,
               initialDate: _selectedDate,
-              firstDate: DateTime.now(),
-              lastDate: DateTime.now().add(Duration(days: 30)),
+              firstDate: ApiDateTime.salonToday(),
+              lastDate: ApiDateTime.salonToday().add(Duration(days: 30)),
             );
             if (picked != null && picked != _selectedDate) {
               setState(() {
@@ -245,12 +246,12 @@ class _BookingScreenState extends State<BookingScreen> {
     final hour = int.parse(timeParts[0]);
     final minute = int.parse(timeParts[1]);
 
-    final appointmentDateTime = DateTime(
-      _selectedDate.year,
-      _selectedDate.month,
-      _selectedDate.day,
-      hour,
-      minute,
+    final appointmentDateTime = ApiDateTime.salonLocalDateTime(
+      year: _selectedDate.year,
+      month: _selectedDate.month,
+      day: _selectedDate.day,
+      hour: hour,
+      minute: minute,
     );
 
     final auth = context.read<AuthProvider>();

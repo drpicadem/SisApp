@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
@@ -125,9 +126,13 @@ class AuthProvider extends ChangeNotifier {
       _email = decodedToken['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] ??
                decodedToken['email'];
 
-      print('User Role: $_role, ID: $_userId, Username: $_username, Email: $_email');
+      if (kDebugMode) {
+        print('User Role: $_role, ID: $_userId, Username: $_username, Email: $_email');
+      }
     } catch (e) {
-      print('Error decoding token: $e');
+      if (kDebugMode) {
+        print('Error decoding token: $e');
+      }
     }
   }
 

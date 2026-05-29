@@ -6,6 +6,8 @@ namespace ŠišAppApi.Services.Interfaces
 {
     public interface IServiceService : ICRUDService<ServiceDto, ServiceSearchObject, ServiceInsertRequest, ServiceUpdateRequest>
     {
+        Task<ServiceDto> InsertAsBarber(ServiceInsertRequest request, int userId);
+        Task<ServiceDto> UpdateAsBarber(int serviceId, ServiceUpdateRequest request, int userId);
         Task<ServiceDto> DeleteAsBarber(int serviceId, int userId);
     }
 }

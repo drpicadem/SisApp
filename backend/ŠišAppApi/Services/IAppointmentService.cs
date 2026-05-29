@@ -8,6 +8,7 @@ namespace ŠišAppApi.Services
     public interface IAppointmentService : ICRUDService<AppointmentDto, AppointmentSearchObject, AppointmentInsertRequest, AppointmentUpdateRequest>
     {
         Task<IEnumerable<string>> GetAvailableSlots(int barberId, DateOnly date, int? serviceId = null);
+        Task<AppointmentDto> GetByIdForUser(int id, int userId, string userRole);
         Task<AppointmentDto> Insert(AppointmentInsertRequest request, int userId);
         Task<AppointmentDto> Cancel(int id, int userId, string userRole, string? reason = null);
     }

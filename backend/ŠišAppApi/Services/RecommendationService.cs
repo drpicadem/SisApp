@@ -35,7 +35,7 @@ public class RecommendationService : IRecommendationService
 
         if (!userAppointments.Any())
         {
-            return await GetPopularRecommendations(maxResults);
+            return await GetPopularRecommendations(userId, maxResults);
         }
 
         var profile = BuildUserProfile(userAppointments);
@@ -258,7 +258,7 @@ public class RecommendationService : IRecommendationService
             }
         }
 
-        if (service.Salon != null && service.Salon.Rating >= 4.0)
+        if (service.Salon != null && service.Salon.ReviewCount > 0 && service.Salon.Rating >= 4.0)
         {
             score += (float)(service.Salon.Rating * 4);
             reasons.Add($"Visoko ocijenjen salon ({service.Salon.Rating:F1}★)");
@@ -325,34 +325,39 @@ public class RecommendationService : IRecommendationService
         }
     }
 
-    private async Task<List<RecommendationDto>> GetPopularRecommendations(int maxResults)
+    private async Task<List<RecommendationDto>> GetPopularRecommendations(int userId, int maxResults)
     {
-        var popular = await _context.Services
+        var popularServices = await _context.Services
             .Include(s => s.Salon)
                 .ThenInclude(salon => salon.CityRef)
             .Where(s => !s.IsDeleted && s.IsActive
                         && s.Salon != null && s.Salon.IsActive && !s.Salon.IsDeleted)
-            .OrderByDescending(s => s.Salon!.Rating)
+            .OrderByDescending(s => s.Salon!.ReviewCount > 0 ? s.Salon.Rating : 0)
             .ThenByDescending(s => s.IsPopular)
             .Take(maxResults)
-            .Select(s => new RecommendationDto
-            {
-                ServiceId = s.Id,
-                ServiceName = s.Name,
-                ServiceDescription = s.Description,
-                Price = s.Price,
-                DurationMinutes = s.DurationMinutes,
-                SalonId = s.SalonId,
-                SalonName = s.Salon!.Name,
-                SalonCity = s.Salon.CityRef != null ? s.Salon.CityRef.Name : string.Empty,
-                SalonRating = s.Salon.Rating,
-                SalonImageIds = s.Salon.ImageIds,
-                Reason = "Popularno",
-                RelevanceScore = (float)s.Salon.Rating * 10
-            })
             .ToListAsync();
 
-        return popular;
+        var topResults = popularServices
+            .Select(s => (service: s, score: (float)s.Salon!.Rating * 10f, reason: "Popularno"))
+            .ToList();
+
+        await PersistRecommendations(userId, topResults);
+
+        return topResults.Select(x => new RecommendationDto
+        {
+            ServiceId = x.service.Id,
+            ServiceName = x.service.Name,
+            ServiceDescription = x.service.Description,
+            Price = x.service.Price,
+            DurationMinutes = x.service.DurationMinutes,
+            SalonId = x.service.SalonId,
+            SalonName = x.service.Salon!.Name,
+            SalonCity = x.service.Salon.CityRef != null ? x.service.Salon.CityRef.Name : string.Empty,
+            SalonRating = x.service.Salon.Rating,
+            SalonImageIds = x.service.Salon.ImageIds,
+            Reason = x.reason,
+            RelevanceScore = x.score
+        }).ToList();
     }
 
     private async Task PersistRecommendations(int userId, List<(Service service, float score, string reason)> results)

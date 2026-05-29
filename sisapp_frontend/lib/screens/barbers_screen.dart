@@ -250,8 +250,12 @@ class _BarbersScreenState extends State<BarbersScreen> {
                     children: [
                       Icon(Icons.star, color: Colors.amber, size: 16),
                       SizedBox(width: 4),
-                      Text(barber.rating.toStringAsFixed(1),
-                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      Text(
+                        barber.hasReviews
+                            ? barber.rating.toStringAsFixed(1)
+                            : 'Nema recenzija',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
                     ],
                   ),
                 ],
@@ -339,7 +343,7 @@ class _BarbersScreenState extends State<BarbersScreen> {
                     final isSelected = selectedIds.contains(service.id);
                     return CheckboxListTile(
                       title: Text(service.name),
-                      subtitle: Text('${service.durationMinutes} min - ${service.price.toStringAsFixed(2)} KM'),
+                      subtitle: Text('${service.durationMinutes} min - ${service.price.toStringAsFixed(2)} EUR'),
                       value: isSelected,
                       activeColor: Color(0xFFE0CFA9),
                       onChanged: (bool? value) {

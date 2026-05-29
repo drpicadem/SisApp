@@ -211,7 +211,7 @@ class _SalonDetailsScreenState extends State<SalonDetailsScreen> {
                 Padding(
                   padding: EdgeInsets.only(left: 8, top: 2),
                   child: Text(
-                    '${service.price.toStringAsFixed(0)} KM',
+                    '${service.price.toStringAsFixed(2)} EUR',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                 ),

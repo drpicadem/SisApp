@@ -10,15 +10,18 @@ public class PaymentFinalizationService : IPaymentFinalizationService
     private readonly ApplicationDbContext _context;
     private readonly INotificationService _notificationService;
     private readonly IEmailService _emailService;
+    private readonly ILogger<PaymentFinalizationService> _logger;
 
     public PaymentFinalizationService(
         ApplicationDbContext context,
         INotificationService notificationService,
-        IEmailService emailService)
+        IEmailService emailService,
+        ILogger<PaymentFinalizationService> logger)
     {
         _context = context;
         _notificationService = notificationService;
         _emailService = emailService;
+        _logger = logger;
     }
 
     public async Task<PaymentFinalizationResult> FinalizeAsync(PaymentFinalizationInput input)
@@ -88,8 +91,12 @@ public class PaymentFinalizationService : IPaymentFinalizationService
                     $"<h1>Rezervacija potvrđena!</h1><p>Poštovani/a {user.FirstName},</p><p>Vaša rezervacija za termin <strong>{appointment.AppointmentDateTime.ToLocalTime():dd.MM.yyyy HH:mm}</strong> je uspješno plaćena.</p><p>Hvala na povjerenju!</p>");
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex,
+                "Notification or email delivery failed after successful payment. " +
+                "AppointmentId: {AppointmentId}, PaymentId: {PaymentId}",
+                input.AppointmentId, payment.Id);
         }
 
         return new PaymentFinalizationResult

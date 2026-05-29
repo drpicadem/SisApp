@@ -77,7 +77,7 @@ namespace ŠišAppApi.Services.Services
             if (appointment.Status != AppointmentStatuses.Completed)
                 throw new UserException("Možete ostaviti recenziju samo za završene termine.");
             if (appointment.UserId != userId)
-                throw new UserException($"Možete ostaviti recenziju samo za svoje termine. (TokenID={userId}, AppID={appointment.UserId})");
+                throw new UserException("Možete ostaviti recenziju samo za svoje termine.");
             if (appointment.BarberId != dto.BarberId)
                 throw new UserException("Navedeni frizer nije radio ovaj termin.");
 
@@ -130,6 +130,7 @@ namespace ŠišAppApi.Services.Services
 
             review.Rating = dto.Rating;
             review.Comment = dto.Comment;
+            review.IsVerified = false;
             review.UpdatedAt = DateTime.UtcNow;
 
             var barber = await _context.Barbers.FindAsync(review.BarberId);

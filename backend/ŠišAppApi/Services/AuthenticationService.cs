@@ -84,7 +84,7 @@ namespace ŠišAppApi.Services
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Login successful for user: {Username}", request.Username);
-            return GenerateToken(user);
+            return await GenerateTokenAsync(user);
         }
 
         public async Task<TokenResponse> Register(RegisterDto request)
@@ -136,21 +136,45 @@ namespace ŠišAppApi.Services
             }
 
             _logger.LogInformation("Registration successful for user: {Username}", request.Username);
-            return GenerateToken(user);
+            return await GenerateTokenAsync(user);
         }
 
         public async Task<TokenResponse?> RefreshToken(string refreshToken)
         {
-            var tokenEntity = await _context.RefreshTokens
-                .Include(rt => rt.User)
-                .FirstOrDefaultAsync(rt => rt.Token == refreshToken && !rt.IsDeleted);
-
-            if (tokenEntity == null || tokenEntity.ExpiresAt < DateTime.UtcNow || tokenEntity.RevokedAt != null)
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                return null;
-            }
+                var tokenEntity = await _context.RefreshTokens
+                    .Include(rt => rt.User)
+                    .FirstOrDefaultAsync(rt => rt.Token == refreshToken && !rt.IsDeleted);
 
-            return GenerateToken(tokenEntity.User);
+                if (tokenEntity == null || tokenEntity.ExpiresAt < DateTime.UtcNow || tokenEntity.RevokedAt != null)
+                {
+                    return null;
+                }
+
+                var now = DateTime.UtcNow;
+                var newRefreshTokenValue = GenerateSecureToken();
+
+                tokenEntity.RevokedAt = now;
+                tokenEntity.IsDeleted = true;
+                tokenEntity.DeletedAt = now;
+                tokenEntity.UpdatedAt = now;
+                tokenEntity.ReasonRevoked = "ReplacedByRefresh";
+                tokenEntity.ReplacedByToken = newRefreshTokenValue;
+
+                var (response, newRefreshTokenEntity) = BuildToken(tokenEntity.User, newRefreshTokenValue);
+                _context.RefreshTokens.Add(newRefreshTokenEntity);
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return response;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<bool> RevokeToken(string? refreshToken, int userId, string? accessTokenJti)
@@ -323,7 +347,21 @@ namespace ŠišAppApi.Services
             await _context.SaveChangesAsync();
         }
 
-        public TokenResponse GenerateToken(User user)
+        private async Task<TokenResponse> GenerateTokenAsync(User user)
+        {
+            var refreshTokenValue = GenerateSecureToken();
+            var (response, refreshTokenEntity) = BuildToken(user, refreshTokenValue);
+            _context.RefreshTokens.Add(refreshTokenEntity);
+            await _context.SaveChangesAsync();
+            return response;
+        }
+
+        private static string GenerateSecureToken()
+        {
+            return Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        }
+
+        private (TokenResponse Response, RefreshToken Entity) BuildToken(User user, string refreshTokenValue)
         {
             var jwtKey = _configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key is not configured");
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
@@ -335,7 +373,7 @@ namespace ŠišAppApi.Services
                 new Claim(ClaimTypes.Name, user.Username),
                 new Claim(ClaimTypes.Role, user.Role),
                 new Claim(ClaimTypes.Email, user.Email ?? ""),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+                new Claim(JwtRegisteredClaimNames.Jti, GenerateSecureToken())
             };
 
             var token = new JwtSecurityToken(
@@ -346,23 +384,20 @@ namespace ŠišAppApi.Services
                 signingCredentials: credentials
             );
 
-            var newRefreshToken = Guid.NewGuid().ToString();
             var refreshTokenEntity = new RefreshToken
             {
                 UserId = user.Id,
-                Token = newRefreshToken,
+                Token = refreshTokenValue,
                 ExpiresAt = DateTime.UtcNow.AddDays(7),
                 CreatedAt = DateTime.UtcNow
             };
-            _context.RefreshTokens.Add(refreshTokenEntity);
-            _context.SaveChanges();
 
-            return new TokenResponse
+            return (new TokenResponse
             {
                 Token = new JwtSecurityTokenHandler().WriteToken(token),
-                RefreshToken = newRefreshToken,
+                RefreshToken = refreshTokenValue,
                 Expiration = token.ValidTo
-            };
+            }, refreshTokenEntity);
         }
 
         private bool VerifyPassword(string password, string passwordHash)

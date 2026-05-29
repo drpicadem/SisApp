@@ -58,6 +58,16 @@ public class Appointment
 
     public string? CancellationReason { get; set; }
 
+    public int? CancelledByUserId { get; set; }
+
+    [ForeignKey("CancelledByUserId")]
+    public User? CancelledByUser { get; set; }
+
+    public int? ConfirmedByUserId { get; set; }
+
+    [ForeignKey("ConfirmedByUserId")]
+    public User? ConfirmedByUser { get; set; }
+
     public bool IsNoShow { get; set; } = false;
 
     [Required]

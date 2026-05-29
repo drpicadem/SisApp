@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using ŠišAppApi.Constants;
 using ŠišAppApi.Data;
 using ŠišAppApi.Filters;
+using ŠišAppApi.Helpers;
 using ŠišAppApi.Models;
 using ŠišAppApi.Models.DTOs;
 using ŠišAppApi.Models.Requests;
@@ -117,35 +118,59 @@ namespace ŠišAppApi.Services
             return _mapper.Map<List<AppointmentDto>>(list);
         }
 
-        public override async Task<AppointmentDto> GetById(int id)
+        public override Task<AppointmentDto> GetById(int id)
         {
-             var entity = await _context.Appointments
+            throw new UnauthorizedAccessException();
+        }
+
+        public async Task<AppointmentDto> GetByIdForUser(int id, int userId, string userRole)
+        {
+            var entity = await LoadAppointmentAsync(id);
+            if (entity == null)
+                throw new NotFoundException("Termin nije pronađen.");
+
+            if (userRole != AppRoles.Admin)
+            {
+                if (userRole == AppRoles.User)
+                {
+                    if (entity.UserId != userId)
+                        throw new UnauthorizedAccessException();
+                }
+                else if (userRole == AppRoles.Barber)
+                {
+                    if (entity.Barber == null || entity.Barber.UserId != userId)
+                        throw new UnauthorizedAccessException();
+                }
+                else
+                {
+                    throw new UnauthorizedAccessException();
+                }
+            }
+
+            return _mapper.Map<AppointmentDto>(entity);
+        }
+
+        private async Task<Appointment?> LoadAppointmentAsync(int id)
+        {
+            return await _context.Appointments
                 .Include(a => a.Salon)
                 .Include(a => a.Service)
                 .Include(a => a.Barber).ThenInclude(b => b.User)
                 .Include(a => a.User)
                 .FirstOrDefaultAsync(a => a.Id == id);
-
-             return _mapper.Map<AppointmentDto>(entity);
         }
 
-        private static TimeZoneInfo GetSalonTimeZone()
-        {
-            try { return TimeZoneInfo.FindSystemTimeZoneById("Europe/Sarajevo"); }
-            catch
-            {
-                try { return TimeZoneInfo.FindSystemTimeZoneById("Central European Standard Time"); }
-                catch { return TimeZoneInfo.Local; }
-            }
-        }
+        private static TimeZoneInfo GetSalonTimeZone() => SalonDateTimeHelper.GetSalonTimeZone();
 
         public async Task<AppointmentDto> Insert(AppointmentInsertRequest request, int userId)
         {
-             var appDateTime = request.AppointmentDateTime;
              var salonTz = GetSalonTimeZone();
-             var appDateTimeLocal = appDateTime.Kind == DateTimeKind.Utc
-                 ? TimeZoneInfo.ConvertTimeFromUtc(appDateTime, salonTz)
-                 : appDateTime;
+             var appDateTimeUtc = SalonDateTimeHelper.NormalizeToUtc(request.AppointmentDateTime);
+             var appDateTimeLocal = TimeZoneInfo.ConvertTimeFromUtc(appDateTimeUtc, salonTz);
+
+             if (appDateTimeUtc <= DateTime.UtcNow)
+                 throw new UserException("Nije moguće rezervisati termin u prošlosti.");
+
              int duration = 30;
              var salonExists = await _context.Salons
                  .AnyAsync(s => s.Id == request.SalonId && !s.IsDeleted && s.IsActive);
@@ -181,7 +206,7 @@ namespace ŠišAppApi.Services
              if (!barberSupportsService)
                  throw new UserException("Odabrani frizer ne pruža odabranu uslugu.");
 
-             var newAppEnd = appDateTime.AddMinutes(duration);
+             var newAppEndUtc = appDateTimeUtc.AddMinutes(duration);
              var dayOfWeek = (int)appDateTimeLocal.DayOfWeek;
              var workingHours = await _context.WorkingHours
                  .FirstOrDefaultAsync(w =>
@@ -223,7 +248,7 @@ namespace ŠišAppApi.Services
                  .AnyAsync(a =>
                     a.UserId == userId &&
                     a.ServiceId == request.ServiceId &&
-                    a.AppointmentDateTime == appDateTime &&
+                    a.AppointmentDateTime == appDateTimeUtc &&
                     a.Status != AppointmentStatuses.Cancelled
                  );
 
@@ -237,10 +262,10 @@ namespace ŠišAppApi.Services
                  .AnyAsync(a =>
                     a.BarberId == request.BarberId &&
                     a.Status != AppointmentStatuses.Cancelled &&
-                    a.AppointmentDateTime < newAppEnd &&
+                    a.AppointmentDateTime < newAppEndUtc &&
                     a.AppointmentDateTime.AddMinutes(
                         (a.Service != null && a.Service.DurationMinutes > 0) ? a.Service.DurationMinutes : 30
-                    ) > appDateTime
+                    ) > appDateTimeUtc
                  );
 
              if (isTaken)
@@ -250,6 +275,7 @@ namespace ŠišAppApi.Services
 
              var entity = _mapper.Map<Appointment>(request);
              entity.UserId = userId;
+             entity.AppointmentDateTime = appDateTimeUtc;
              entity.Status = AppointmentStatuses.Pending;
              entity.PaymentStatus = AppointmentPaymentStatuses.Pending;
              entity.CreatedAt = DateTime.UtcNow;
@@ -258,7 +284,7 @@ namespace ŠišAppApi.Services
              await _context.SaveChangesAsync();
 
              var serviceName = service.Name ?? "usluga";
-             var appointmentTime = entity.AppointmentDateTime.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+             var appointmentTime = SalonDateTimeHelper.FormatForDisplay(entity.AppointmentDateTime);
 
              await _notificationService.CreateNotification(
                  entity.UserId,
@@ -313,9 +339,10 @@ namespace ŠišAppApi.Services
                    durationMinutes = service.DurationMinutes;
             }
 
+            var salonTz = GetSalonTimeZone();
             var dayOfWeek = (int)date.DayOfWeek;
             var workingHours = await _context.WorkingHours
-                .FirstOrDefaultAsync(w => w.BarberId == barberId && w.DayOfWeek == dayOfWeek && w.IsWorking);
+                .FirstOrDefaultAsync(w => w.BarberId == barberId && w.DayOfWeek == dayOfWeek && w.IsWorking && !w.IsDeleted);
 
             var availableSlots = new List<string>();
             TimeSpan currentTime;
@@ -333,27 +360,10 @@ namespace ŠišAppApi.Services
                 endTime = workingHours.EndTime;
             }
 
-            TimeZoneInfo tz;
-            try
-            {
-                tz = TimeZoneInfo.FindSystemTimeZoneById("Europe/Sarajevo");
-            }
-            catch
-            {
-                try
-                {
-                    tz = TimeZoneInfo.FindSystemTimeZoneById("Central European Standard Time");
-                }
-                catch
-                {
-                    tz = TimeZoneInfo.Local;
-                }
-            }
-
             var localDayStart = date.ToDateTime(TimeOnly.MinValue);
-            var localDayEnd = date.ToDateTime(TimeOnly.MaxValue);
-            var startUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(localDayStart, DateTimeKind.Unspecified), tz);
-            var endUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(localDayEnd, DateTimeKind.Unspecified), tz);
+            var localDayEnd = date.ToDateTime(new TimeOnly(23, 59, 59, 999));
+            var startUtc = SalonDateTimeHelper.SalonLocalToUtc(localDayStart);
+            var endUtc = SalonDateTimeHelper.SalonLocalToUtc(localDayEnd);
 
             var existingAppointments = await _context.Appointments
                 .Include(a => a.Service)
@@ -364,14 +374,15 @@ namespace ŠišAppApi.Services
                             a.Status != AppointmentStatuses.Cancelled)
                 .ToListAsync();
 
-            var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
-            var isToday = date == DateOnly.FromDateTime(now);
-            var currentTimeNow = TimeOnly.FromDateTime(now);
+            var nowSalonLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, salonTz);
+            var isToday = date == DateOnly.FromDateTime(nowSalonLocal);
+            var currentTimeNow = TimeOnly.FromDateTime(nowSalonLocal);
 
             while (currentTime.Add(TimeSpan.FromMinutes(durationMinutes)) <= endTime)
             {
-                var slotStart = date.ToDateTime(TimeOnly.FromTimeSpan(currentTime));
-                var slotEnd = slotStart.AddMinutes(durationMinutes);
+                var slotLocalStart = date.ToDateTime(TimeOnly.FromTimeSpan(currentTime));
+                var slotStartUtc = SalonDateTimeHelper.SalonLocalToUtc(slotLocalStart);
+                var slotEndUtc = slotStartUtc.AddMinutes(durationMinutes);
 
                 if (isToday && TimeOnly.FromTimeSpan(currentTime) <= currentTimeNow)
                 {
@@ -381,12 +392,10 @@ namespace ŠišAppApi.Services
 
                 bool isOverlap = existingAppointments.Any(a =>
                 {
-                    // Appointments stored as UTC – convert to local for comparison with local slotStart
-                    var appStartUtc = DateTime.SpecifyKind(a.AppointmentDateTime, DateTimeKind.Utc);
-                    var appStart = TimeZoneInfo.ConvertTimeFromUtc(appStartUtc, tz);
+                    var appStartUtc = SalonDateTimeHelper.NormalizeToUtc(a.AppointmentDateTime);
                     var existingDuration = (a.Service != null && a.Service.DurationMinutes > 0) ? a.Service.DurationMinutes : 30;
-                    var appEnd = appStart.AddMinutes(existingDuration);
-                    return (slotStart < appEnd && slotEnd > appStart);
+                    var appEndUtc = appStartUtc.AddMinutes(existingDuration);
+                    return slotStartUtc < appEndUtc && slotEndUtc > appStartUtc;
                 });
 
                 if (!isOverlap)
@@ -419,6 +428,13 @@ namespace ŠišAppApi.Services
 
             if (!AppointmentStateMachine.CanCancel(entity.Status))
                 throw new UserException("Nije moguće otkazati termin sa statusom: " + entity.Status);
+
+            if (entity.PaymentStatus == AppointmentPaymentStatuses.Paid && userRole != AppRoles.Admin)
+            {
+                throw new UserException(
+                    "Ovaj termin je već plaćen i ne može biti otkazan putem aplikacije. " +
+                    "Molimo kontaktirajte administratora za povrat sredstava.");
+            }
 
             if (entity.AppointmentDateTime < DateTime.UtcNow)
                 throw new UserException("Ne možete otkazati termin koji je već prošao.");
@@ -466,6 +482,10 @@ namespace ŠišAppApi.Services
             entity.Status = AppointmentStatuses.Cancelled;
             entity.CancelledAt = DateTime.UtcNow;
             entity.CancellationReason = normalizedReason;
+            entity.CancelledByUserId = userId;
+
+            if (entity.PaymentStatus == AppointmentPaymentStatuses.Paid && userRole == AppRoles.Admin)
+                entity.PaymentStatus = AppointmentPaymentStatuses.RefundRequired;
 
             await _context.SaveChangesAsync();
 

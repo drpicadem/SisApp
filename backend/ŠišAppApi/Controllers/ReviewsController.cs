@@ -82,6 +82,7 @@ public class ReviewsController : ControllerBase
         return Ok(result);
     }
 
+    [AllowAnonymous]
     [HttpGet("barber/{barberId}")]
     public async Task<ActionResult<IEnumerable<ReviewDto>>> GetReviewsForBarber(
         int barberId, [FromQuery] int page = 1, [FromQuery] int pageSize = DefaultPageSize)
@@ -90,6 +91,7 @@ public class ReviewsController : ControllerBase
         return Ok(reviews);
     }
 
+    [AllowAnonymous]
     [HttpGet("salon/{salonId}")]
     public async Task<ActionResult<IEnumerable<ReviewDto>>> GetReviewsForSalon(
         int salonId, [FromQuery] int page = 1, [FromQuery] int pageSize = DefaultPageSize)

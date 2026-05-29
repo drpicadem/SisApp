@@ -295,7 +295,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> with SingleTick
                     }
 
                     final appointment = provider.appointments[index];
-                    final currencyFormatter = NumberFormat.currency(locale: 'bs', symbol: 'KM');
+                    final currencyFormatter = NumberFormat.currency(locale: 'de', symbol: 'EUR', decimalDigits: 2);
 
                     bool showHeader = false;
                     if (index == 0) {

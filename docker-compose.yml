@@ -38,6 +38,7 @@ services:
     ports:
       - "7100:8080" # Exposed port
     environment:
+      - TZ=Europe/Sarajevo
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=${DB_CONNECTION_STRING}
       - RabbitMQ__Host=${RABBITMQ_HOST}
@@ -49,6 +50,7 @@ services:
       - Jwt__ExpirationInMinutes=${JWT_EXPIRATION}
       - Stripe__SecretKey=${STRIPE_SECRET_KEY}
       - Stripe__PublishableKey=${STRIPE_PUBLISHABLE_KEY}
+      - Stripe__WebhookSecret=${STRIPE_WEBHOOK_SECRET}
       - Cors__AllowedOrigins=${CORS_ALLOWED_ORIGINS}
       - EmailSettings__SenderEmail=${SENDER_EMAIL}
       - EmailSettings__SenderPassword=${SENDER_PASSWORD}

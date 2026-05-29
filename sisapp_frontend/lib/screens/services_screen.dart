@@ -290,7 +290,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     runSpacing: 6,
                     children: [
                       _buildChip(Icons.access_time, '${service.durationMinutes} min', Colors.blue),
-                      _buildChip(Icons.attach_money, '${service.price.toStringAsFixed(2)} KM', Colors.green),
+                      _buildChip(Icons.attach_money, '${service.price.toStringAsFixed(2)} EUR', Colors.green),
                       if (service.categoryName != null && service.categoryName!.isNotEmpty)
                         _buildChip(Icons.category, service.categoryName!, Colors.purple),
                       if (service.isPopular)
@@ -441,7 +441,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   SizedBox(height: 8),
                   TextFormField(
                     controller: priceController,
-                    decoration: InputDecoration(labelText: 'Cijena (KM)', prefixIcon: Icon(Icons.attach_money)),
+                    decoration: InputDecoration(labelText: 'Cijena (EUR)', prefixIcon: Icon(Icons.attach_money)),
                     keyboardType: TextInputType.number,
                     validator: FormValidators.servicePrice,
                   ),
@@ -520,7 +520,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            'Dodavanje nije uspjelo. Provjerite: naziv (2-80), cijena (0-1000 KM), trajanje (1-600 min).',
+                            'Dodavanje nije uspjelo. Provjerite: naziv (2-80), cijena (0-1000 EUR), trajanje (1-600 min).',
                           ),
                         ),
                       );
@@ -584,7 +584,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   SizedBox(height: 8),
                   TextFormField(
                     controller: priceController,
-                    decoration: InputDecoration(labelText: 'Cijena (KM)', prefixIcon: Icon(Icons.attach_money)),
+                    decoration: InputDecoration(labelText: 'Cijena (EUR)', prefixIcon: Icon(Icons.attach_money)),
                     keyboardType: TextInputType.number,
                     validator: FormValidators.servicePrice,
                   ),
@@ -665,7 +665,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            'Ažuriranje nije uspjelo. Provjerite: naziv (2-80), cijena (0-1000 KM), trajanje (1-600 min).',
+                            'Ažuriranje nije uspjelo. Provjerite: naziv (2-80), cijena (0-1000 EUR), trajanje (1-600 min).',
                           ),
                         ),
                       );
