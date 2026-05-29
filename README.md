@@ -6,7 +6,7 @@ Seminar project for **Software Development II (Razvoj softvera II)**.
 
 .
 
-1. Download `fit-build-2026-04-29.zip` from GitHub `Releases`.
+1. Download `fit-build-2026-05-29.zip` from GitHub `Releases`.
 2. Extract package.
 3. Start backend with Docker.
 4. Start client applications from extracted package.
